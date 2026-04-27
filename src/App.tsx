@@ -1,10 +1,20 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { loadProjects, saveProjects } from "./storage";
-import type { Project, Song } from "./types";
+import {
+  loadAdminSession,
+  loadProjects,
+  saveAdminSession,
+  saveProjects
+} from "./storage";
+import type { Project, Show, Song } from "./types";
 
 type ProjectForm = Pick<Project, "name" | "description">;
 type SongForm = Omit<Song, "id">;
+type ShowForm = Pick<Show, "title" | "date" | "notes">;
 type SongMode = { type: "create" } | { type: "edit"; songId: string };
+type ShowMode = { type: "create" } | { type: "edit"; showId: string };
+
+const adminName = "Lautaro MC";
+const adminPassword = "metro2026";
 
 const emptyProjectForm: ProjectForm = {
   name: "",
@@ -17,6 +27,12 @@ const emptySongForm: SongForm = {
   timeSignatureNumerator: 4,
   timeSignatureDenominator: 4,
   countInBars: 1,
+  notes: ""
+};
+
+const emptyShowForm: ShowForm = {
+  title: "",
+  date: "",
   notes: ""
 };
 
@@ -49,24 +65,68 @@ function normalizeSongForm(form: SongForm): SongForm {
   };
 }
 
-function formatDate(value: string) {
+function formatDateTime(value: string) {
   return new Intl.DateTimeFormat("es-AR", {
     dateStyle: "medium",
     timeStyle: "short"
   }).format(new Date(value));
 }
 
+function formatShowDate(value: string) {
+  if (!value) {
+    return "Sin fecha";
+  }
+
+  return new Intl.DateTimeFormat("es-AR", {
+    dateStyle: "full"
+  }).format(new Date(`${value}T12:00:00`));
+}
+
 export default function App() {
+  const [isLoggedIn, setIsLoggedIn] = useState(() => loadAdminSession());
+  const [loginName, setLoginName] = useState(adminName);
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
   const [projects, setProjects] = useState<Project[]>(() => loadProjects());
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [selectedShowId, setSelectedShowId] = useState<string | null>(null);
   const [newProjectForm, setNewProjectForm] = useState<ProjectForm>(emptyProjectForm);
   const [projectForm, setProjectForm] = useState<ProjectForm>(emptyProjectForm);
   const [songMode, setSongMode] = useState<SongMode>({ type: "create" });
   const [songForm, setSongForm] = useState<SongForm>(emptySongForm);
+  const [showMode, setShowMode] = useState<ShowMode>({ type: "create" });
+  const [showForm, setShowForm] = useState<ShowForm>(emptyShowForm);
+  const [songToAddId, setSongToAddId] = useState("");
 
   const selectedProject = useMemo(() => {
     return projects.find((project) => project.id === selectedProjectId) ?? projects[0] ?? null;
   }, [projects, selectedProjectId]);
+
+  const selectedShow = useMemo(() => {
+    if (!selectedProject) {
+      return null;
+    }
+
+    return selectedProject.shows.find((show) => show.id === selectedShowId) ?? selectedProject.shows[0] ?? null;
+  }, [selectedProject, selectedShowId]);
+
+  const selectedShowSongs = useMemo(() => {
+    if (!selectedProject || !selectedShow) {
+      return [];
+    }
+
+    return selectedShow.songIds
+      .map((songId) => selectedProject.songs.find((song) => song.id === songId))
+      .filter((song): song is Song => Boolean(song));
+  }, [selectedProject, selectedShow]);
+
+  const availableSongsForShow = useMemo(() => {
+    if (!selectedProject || !selectedShow) {
+      return [];
+    }
+
+    return selectedProject.songs.filter((song) => !selectedShow.songIds.includes(song.id));
+  }, [selectedProject, selectedShow]);
 
   useEffect(() => {
     saveProjects(projects);
@@ -86,6 +146,7 @@ export default function App() {
   useEffect(() => {
     if (!selectedProject) {
       setProjectForm(emptyProjectForm);
+      setSelectedShowId(null);
       return;
     }
 
@@ -95,7 +156,15 @@ export default function App() {
     });
     setSongMode({ type: "create" });
     setSongForm(emptySongForm);
-  }, [selectedProject?.id]);
+
+    if (!selectedShowId || !selectedProject.shows.some((show) => show.id === selectedShowId)) {
+      setSelectedShowId(selectedProject.shows[0]?.id ?? null);
+    }
+  }, [selectedProject, selectedShowId]);
+
+  useEffect(() => {
+    setSongToAddId(availableSongsForShow[0]?.id ?? "");
+  }, [availableSongsForShow]);
 
   function updateProject(projectId: string, updater: (project: Project) => Project) {
     setProjects((currentProjects) =>
@@ -108,6 +177,25 @@ export default function App() {
           : project
       )
     );
+  }
+
+  function handleLogin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (loginName.trim() === adminName && loginPassword === adminPassword) {
+      setIsLoggedIn(true);
+      saveAdminSession(true);
+      setLoginError("");
+      setLoginPassword("");
+      return;
+    }
+
+    setLoginError("Usuario o contraseña incorrectos.");
+  }
+
+  function handleLogout() {
+    setIsLoggedIn(false);
+    saveAdminSession(false);
   }
 
   function handleCreateProject(event: FormEvent<HTMLFormElement>) {
@@ -126,6 +214,7 @@ export default function App() {
       name,
       description,
       songs: [],
+      shows: [],
       createdAt: now,
       updatedAt: now
     };
@@ -160,7 +249,7 @@ export default function App() {
       return;
     }
 
-    const confirmed = window.confirm(`Borrar el proyecto/banda "${selectedProject.name}"?`);
+    const confirmed = window.confirm(`Borrar el proyecto "${selectedProject.name}"?`);
 
     if (!confirmed) {
       return;
@@ -188,12 +277,7 @@ export default function App() {
       updateProject(selectedProject.id, (project) => ({
         ...project,
         songs: project.songs.map((song) =>
-          song.id === songMode.songId
-            ? {
-                ...song,
-                ...cleanSong
-              }
-            : song
+          song.id === songMode.songId ? { ...song, ...cleanSong } : song
         )
       }));
     } else {
@@ -239,7 +323,12 @@ export default function App() {
 
     updateProject(selectedProject.id, (project) => ({
       ...project,
-      songs: project.songs.filter((currentSong) => currentSong.id !== songId)
+      songs: project.songs.filter((currentSong) => currentSong.id !== songId),
+      shows: project.shows.map((show) => ({
+        ...show,
+        songIds: show.songIds.filter((currentSongId) => currentSongId !== songId),
+        updatedAt: new Date().toISOString()
+      }))
     }));
 
     if (songMode.type === "edit" && songMode.songId === songId) {
@@ -248,14 +337,201 @@ export default function App() {
     }
   }
 
+  function handleShowSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!selectedProject) {
+      return;
+    }
+
+    const title = showForm.title.trim();
+
+    if (!title) {
+      return;
+    }
+
+    if (showMode.type === "edit") {
+      updateProject(selectedProject.id, (project) => ({
+        ...project,
+        shows: project.shows.map((show) =>
+          show.id === showMode.showId
+            ? {
+                ...show,
+                title,
+                date: showForm.date,
+                notes: showForm.notes.trim(),
+                updatedAt: new Date().toISOString()
+              }
+            : show
+        )
+      }));
+    } else {
+      const now = new Date().toISOString();
+      const show: Show = {
+        id: createId(),
+        title,
+        date: showForm.date,
+        songIds: [],
+        notes: showForm.notes.trim(),
+        createdAt: now,
+        updatedAt: now
+      };
+
+      updateProject(selectedProject.id, (project) => ({
+        ...project,
+        shows: [show, ...project.shows]
+      }));
+      setSelectedShowId(show.id);
+    }
+
+    setShowMode({ type: "create" });
+    setShowForm(emptyShowForm);
+  }
+
+  function handleEditShow(show: Show) {
+    setShowMode({ type: "edit", showId: show.id });
+    setShowForm({
+      title: show.title,
+      date: show.date,
+      notes: show.notes
+    });
+  }
+
+  function handleDeleteShow(showId: string) {
+    if (!selectedProject) {
+      return;
+    }
+
+    const show = selectedProject.shows.find((currentShow) => currentShow.id === showId);
+    const confirmed = window.confirm(`Borrar el show "${show?.title ?? ""}"?`);
+
+    if (!confirmed) {
+      return;
+    }
+
+    updateProject(selectedProject.id, (project) => ({
+      ...project,
+      shows: project.shows.filter((currentShow) => currentShow.id !== showId)
+    }));
+
+    if (showMode.type === "edit" && showMode.showId === showId) {
+      setShowMode({ type: "create" });
+      setShowForm(emptyShowForm);
+    }
+  }
+
+  function handleAddSongToShow(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!selectedProject || !selectedShow || !songToAddId) {
+      return;
+    }
+
+    updateProject(selectedProject.id, (project) => ({
+      ...project,
+      shows: project.shows.map((show) =>
+        show.id === selectedShow.id
+          ? {
+              ...show,
+              songIds: show.songIds.includes(songToAddId)
+                ? show.songIds
+                : [...show.songIds, songToAddId],
+              updatedAt: new Date().toISOString()
+            }
+          : show
+      )
+    }));
+  }
+
+  function moveShowSong(index: number, direction: -1 | 1) {
+    if (!selectedProject || !selectedShow) {
+      return;
+    }
+
+    const nextIndex = index + direction;
+
+    if (nextIndex < 0 || nextIndex >= selectedShow.songIds.length) {
+      return;
+    }
+
+    const nextSongIds = [...selectedShow.songIds];
+    const [songId] = nextSongIds.splice(index, 1);
+    nextSongIds.splice(nextIndex, 0, songId);
+
+    updateProject(selectedProject.id, (project) => ({
+      ...project,
+      shows: project.shows.map((show) =>
+        show.id === selectedShow.id
+          ? {
+              ...show,
+              songIds: nextSongIds,
+              updatedAt: new Date().toISOString()
+            }
+          : show
+      )
+    }));
+  }
+
+  function removeSongFromShow(songId: string) {
+    if (!selectedProject || !selectedShow) {
+      return;
+    }
+
+    updateProject(selectedProject.id, (project) => ({
+      ...project,
+      shows: project.shows.map((show) =>
+        show.id === selectedShow.id
+          ? {
+              ...show,
+              songIds: show.songIds.filter((currentSongId) => currentSongId !== songId),
+              updatedAt: new Date().toISOString()
+            }
+          : show
+      )
+    }));
+  }
+
+  if (!isLoggedIn) {
+    return (
+      <main className="login-shell">
+        <form className="login-card" onSubmit={handleLogin}>
+          <span className="app-kicker">metronomo-live</span>
+          <h1>Ingreso admin</h1>
+          <label>
+            Usuario
+            <input
+              value={loginName}
+              onChange={(event) => setLoginName(event.target.value)}
+              autoComplete="username"
+            />
+          </label>
+          <label>
+            Contraseña
+            <input
+              value={loginPassword}
+              onChange={(event) => setLoginPassword(event.target.value)}
+              type="password"
+              autoComplete="current-password"
+            />
+          </label>
+          {loginError && <p className="form-error">{loginError}</p>}
+          <button type="submit">Entrar</button>
+        </form>
+      </main>
+    );
+  }
+
   return (
     <main className="app-shell">
       <header className="app-header">
         <div>
           <span className="app-kicker">metronomo-live</span>
-          <h1>Biblioteca musical</h1>
+          <h1>Hola, {adminName}</h1>
+          <p>{projects.length} proyectos/bandas cargados</p>
         </div>
-        <p>{projects.length} proyectos/bandas</p>
+        <button className="secondary-button" type="button" onClick={handleLogout}>
+          Salir
+        </button>
       </header>
 
       <div className="workspace">
@@ -272,7 +548,7 @@ export default function App() {
                     name: event.target.value
                   }))
                 }
-                placeholder="Ej: Banda principal"
+                placeholder="Ej: Los sueños del equilibrio"
                 required
               />
             </label>
@@ -290,7 +566,7 @@ export default function App() {
                 placeholder="Notas de la banda o proyecto"
               />
             </label>
-            <button type="submit">Crear</button>
+            <button type="submit">Crear proyecto</button>
           </form>
 
           <div className="project-list">
@@ -307,7 +583,9 @@ export default function App() {
                   onClick={() => setSelectedProjectId(project.id)}
                 >
                   <strong>{project.name}</strong>
-                  <span>{project.songs.length} canciones</span>
+                  <span>
+                    {project.songs.length} canciones · {project.shows.length} shows
+                  </span>
                 </button>
               ))
             )}
@@ -321,10 +599,10 @@ export default function App() {
                 <div>
                   <span className="section-label">Proyecto</span>
                   <h2>{selectedProject.name}</h2>
-                  <p>Actualizado: {formatDate(selectedProject.updatedAt)}</p>
+                  <p>Actualizado: {formatDateTime(selectedProject.updatedAt)}</p>
                 </div>
                 <button className="danger-button" type="button" onClick={handleDeleteProject}>
-                  Borrar
+                  Borrar proyecto
                 </button>
               </div>
 
@@ -358,113 +636,216 @@ export default function App() {
                 <button type="submit">Guardar proyecto</button>
               </form>
 
-              <div className="songs-area">
-                <form className="song-editor" onSubmit={handleSongSubmit}>
-                  <div className="section-header compact">
-                    <div>
-                      <span className="section-label">
-                        {songMode.type === "edit" ? "Editar canción" : "Nueva canción"}
-                      </span>
-                      <h2>Canciones</h2>
+              <div className="management-grid">
+                <section className="panel-section">
+                  <form className="form-stack" onSubmit={handleSongSubmit}>
+                    <div className="section-header compact">
+                      <div>
+                        <span className="section-label">
+                          {songMode.type === "edit" ? "Editar canción" : "Nueva canción"}
+                        </span>
+                        <h2>Canciones</h2>
+                      </div>
+                      {songMode.type === "edit" && (
+                        <button
+                          className="secondary-button"
+                          type="button"
+                          onClick={() => {
+                            setSongMode({ type: "create" });
+                            setSongForm(emptySongForm);
+                          }}
+                        >
+                          Cancelar
+                        </button>
+                      )}
                     </div>
-                    {songMode.type === "edit" && (
-                      <button
-                        className="secondary-button"
-                        type="button"
-                        onClick={() => {
-                          setSongMode({ type: "create" });
-                          setSongForm(emptySongForm);
-                        }}
-                      >
-                        Cancelar
-                      </button>
+
+                    <div className="song-grid">
+                      <label className="wide-field">
+                        Título
+                        <input
+                          value={songForm.title}
+                          onChange={(event) =>
+                            setSongForm((current) => ({
+                              ...current,
+                              title: event.target.value
+                            }))
+                          }
+                          placeholder="Ej: Canción 1"
+                          required
+                        />
+                      </label>
+                      <label>
+                        BPM
+                        <input
+                          min={20}
+                          max={300}
+                          type="number"
+                          value={songForm.bpm}
+                          onChange={(event) =>
+                            setSongForm((current) => ({
+                              ...current,
+                              bpm: Number(event.target.value)
+                            }))
+                          }
+                        />
+                      </label>
+                      <label>
+                        Compás arriba
+                        <input
+                          min={1}
+                          max={16}
+                          type="number"
+                          value={songForm.timeSignatureNumerator}
+                          onChange={(event) =>
+                            setSongForm((current) => ({
+                              ...current,
+                              timeSignatureNumerator: Number(event.target.value)
+                            }))
+                          }
+                        />
+                      </label>
+                      <label>
+                        Compás abajo
+                        <select
+                          value={songForm.timeSignatureDenominator}
+                          onChange={(event) =>
+                            setSongForm((current) => ({
+                              ...current,
+                              timeSignatureDenominator: Number(event.target.value)
+                            }))
+                          }
+                        >
+                          {denominatorOptions.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        Count-in
+                        <input
+                          min={0}
+                          max={8}
+                          type="number"
+                          value={songForm.countInBars}
+                          onChange={(event) =>
+                            setSongForm((current) => ({
+                              ...current,
+                              countInBars: Number(event.target.value)
+                            }))
+                          }
+                        />
+                      </label>
+                      <label className="wide-field">
+                        Notas
+                        <textarea
+                          value={songForm.notes}
+                          onChange={(event) =>
+                            setSongForm((current) => ({
+                              ...current,
+                              notes: event.target.value
+                            }))
+                          }
+                          rows={3}
+                        />
+                      </label>
+                    </div>
+
+                    <button type="submit">
+                      {songMode.type === "edit" ? "Guardar canción" : "Crear canción"}
+                    </button>
+                  </form>
+
+                  <div className="song-list">
+                    {selectedProject.songs.length === 0 ? (
+                      <p className="empty-state">Sin canciones.</p>
+                    ) : (
+                      selectedProject.songs.map((song) => (
+                        <article className="song-card" key={song.id}>
+                          <div>
+                            <h3>{song.title}</h3>
+                            <p>
+                              {song.bpm} BPM · Compás {song.timeSignatureNumerator}/
+                              {song.timeSignatureDenominator} · Count-in {song.countInBars}
+                            </p>
+                            {song.notes && <p className="song-notes">{song.notes}</p>}
+                          </div>
+                          <div className="song-actions">
+                            <button type="button" onClick={() => handleEditSong(song)}>
+                              Editar
+                            </button>
+                            <button
+                              className="danger-button"
+                              type="button"
+                              onClick={() => handleDeleteSong(song.id)}
+                            >
+                              Borrar
+                            </button>
+                          </div>
+                        </article>
+                      ))
                     )}
                   </div>
+                </section>
 
-                  <div className="song-grid">
-                    <label className="wide-field">
-                      Título
+                <section className="panel-section">
+                  <form className="form-stack" onSubmit={handleShowSubmit}>
+                    <div className="section-header compact">
+                      <div>
+                        <span className="section-label">
+                          {showMode.type === "edit" ? "Editar show" : "Nuevo show"}
+                        </span>
+                        <h2>Shows</h2>
+                      </div>
+                      {showMode.type === "edit" && (
+                        <button
+                          className="secondary-button"
+                          type="button"
+                          onClick={() => {
+                            setShowMode({ type: "create" });
+                            setShowForm(emptyShowForm);
+                          }}
+                        >
+                          Cancelar
+                        </button>
+                      )}
+                    </div>
+
+                    <label>
+                      Nombre
                       <input
-                        value={songForm.title}
+                        value={showForm.title}
                         onChange={(event) =>
-                          setSongForm((current) => ({
+                          setShowForm((current) => ({
                             ...current,
                             title: event.target.value
                           }))
                         }
-                        placeholder="Ej: Canción 1"
+                        placeholder="Ej: Show 13 de mayo"
                         required
                       />
                     </label>
                     <label>
-                      BPM
+                      Fecha
                       <input
-                        min={20}
-                        max={300}
-                        type="number"
-                        value={songForm.bpm}
+                        value={showForm.date}
                         onChange={(event) =>
-                          setSongForm((current) => ({
+                          setShowForm((current) => ({
                             ...current,
-                            bpm: Number(event.target.value)
+                            date: event.target.value
                           }))
                         }
+                        type="date"
                       />
                     </label>
                     <label>
-                      Compás arriba
-                      <input
-                        min={1}
-                        max={16}
-                        type="number"
-                        value={songForm.timeSignatureNumerator}
-                        onChange={(event) =>
-                          setSongForm((current) => ({
-                            ...current,
-                            timeSignatureNumerator: Number(event.target.value)
-                          }))
-                        }
-                      />
-                    </label>
-                    <label>
-                      Compás abajo
-                      <select
-                        value={songForm.timeSignatureDenominator}
-                        onChange={(event) =>
-                          setSongForm((current) => ({
-                            ...current,
-                            timeSignatureDenominator: Number(event.target.value)
-                          }))
-                        }
-                      >
-                        {denominatorOptions.map((option) => (
-                          <option key={option} value={option}>
-                            {option}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      Count-in
-                      <input
-                        min={0}
-                        max={8}
-                        type="number"
-                        value={songForm.countInBars}
-                        onChange={(event) =>
-                          setSongForm((current) => ({
-                            ...current,
-                            countInBars: Number(event.target.value)
-                          }))
-                        }
-                      />
-                    </label>
-                    <label className="wide-field">
                       Notas
                       <textarea
-                        value={songForm.notes}
+                        value={showForm.notes}
                         onChange={(event) =>
-                          setSongForm((current) => ({
+                          setShowForm((current) => ({
                             ...current,
                             notes: event.target.value
                           }))
@@ -472,43 +853,122 @@ export default function App() {
                         rows={3}
                       />
                     </label>
+                    <button type="submit">
+                      {showMode.type === "edit" ? "Guardar show" : "Crear show"}
+                    </button>
+                  </form>
+
+                  <div className="show-list">
+                    {selectedProject.shows.length === 0 ? (
+                      <p className="empty-state">Sin shows.</p>
+                    ) : (
+                      selectedProject.shows.map((show) => (
+                        <button
+                          className={show.id === selectedShow?.id ? "show-item active" : "show-item"}
+                          key={show.id}
+                          type="button"
+                          onClick={() => setSelectedShowId(show.id)}
+                        >
+                          <strong>{show.title}</strong>
+                          <span>
+                            {formatShowDate(show.date)} · {show.songIds.length} canciones
+                          </span>
+                        </button>
+                      ))
+                    )}
                   </div>
 
-                  <button type="submit">
-                    {songMode.type === "edit" ? "Guardar canción" : "Crear canción"}
-                  </button>
-                </form>
-
-                <div className="song-list">
-                  {selectedProject.songs.length === 0 ? (
-                    <p className="empty-state">Sin canciones.</p>
-                  ) : (
-                    selectedProject.songs.map((song) => (
-                      <article className="song-card" key={song.id}>
+                  {selectedShow && (
+                    <div className="setlist-panel">
+                      <div className="section-header compact">
                         <div>
-                          <h3>{song.title}</h3>
-                          <p>
-                            {song.bpm} BPM · Compás {song.timeSignatureNumerator}/
-                            {song.timeSignatureDenominator} · Count-in {song.countInBars}
-                          </p>
-                          {song.notes && <p className="song-notes">{song.notes}</p>}
+                          <span className="section-label">Orden del show</span>
+                          <h2>{selectedShow.title}</h2>
+                          <p>{formatShowDate(selectedShow.date)}</p>
                         </div>
                         <div className="song-actions">
-                          <button type="button" onClick={() => handleEditSong(song)}>
+                          <button type="button" onClick={() => handleEditShow(selectedShow)}>
                             Editar
                           </button>
                           <button
                             className="danger-button"
                             type="button"
-                            onClick={() => handleDeleteSong(song.id)}
+                            onClick={() => handleDeleteShow(selectedShow.id)}
                           >
                             Borrar
                           </button>
                         </div>
-                      </article>
-                    ))
+                      </div>
+
+                      <form className="add-song-form" onSubmit={handleAddSongToShow}>
+                        <label>
+                          Agregar canción
+                          <select
+                            value={songToAddId}
+                            onChange={(event) => setSongToAddId(event.target.value)}
+                            disabled={availableSongsForShow.length === 0}
+                          >
+                            {availableSongsForShow.length === 0 ? (
+                              <option value="">No hay canciones disponibles</option>
+                            ) : (
+                              availableSongsForShow.map((song) => (
+                                <option key={song.id} value={song.id}>
+                                  {song.title}
+                                </option>
+                              ))
+                            )}
+                          </select>
+                        </label>
+                        <button type="submit" disabled={availableSongsForShow.length === 0}>
+                          Agregar
+                        </button>
+                      </form>
+
+                      <div className="setlist">
+                        {selectedShowSongs.length === 0 ? (
+                          <p className="empty-state">Este show todavía no tiene canciones.</p>
+                        ) : (
+                          selectedShowSongs.map((song, index) => (
+                            <article className="setlist-item" key={song.id}>
+                              <strong>
+                                {index + 1}. {song.title}
+                              </strong>
+                              <span>
+                                {song.bpm} BPM · {song.timeSignatureNumerator}/
+                                {song.timeSignatureDenominator}
+                              </span>
+                              <div className="setlist-actions">
+                                <button
+                                  className="secondary-button"
+                                  type="button"
+                                  onClick={() => moveShowSong(index, -1)}
+                                  disabled={index === 0}
+                                >
+                                  Subir
+                                </button>
+                                <button
+                                  className="secondary-button"
+                                  type="button"
+                                  onClick={() => moveShowSong(index, 1)}
+                                  disabled={index === selectedShowSongs.length - 1}
+                                >
+                                  Bajar
+                                </button>
+                                <button
+                                  className="danger-button"
+                                  type="button"
+                                  onClick={() => removeSongFromShow(song.id)}
+                                >
+                                  Quitar
+                                </button>
+                              </div>
+                            </article>
+                          ))
+                        )}
+                      </div>
+                    </div>
                   )}
-                </div>
+                </section>
               </div>
             </>
           ) : (
@@ -522,3 +982,4 @@ export default function App() {
     </main>
   );
 }
+

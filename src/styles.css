@@ -42,6 +42,11 @@ button:hover {
   background: #59c79d;
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 button:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
@@ -74,10 +79,32 @@ label {
   font-weight: 800;
 }
 
+.login-shell,
 .app-shell {
   width: min(1180px, calc(100% - 32px));
   margin: 0 auto;
   padding: 28px 0;
+}
+
+.login-shell {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+}
+
+.login-card {
+  display: grid;
+  width: min(100%, 420px);
+  gap: 1rem;
+  border: 1px solid #2d3833;
+  border-radius: 8px;
+  background: #181d20;
+  padding: 24px;
+}
+
+.login-card h1 {
+  margin: 0;
+  font-size: 2rem;
 }
 
 .app-header {
@@ -95,7 +122,7 @@ label {
 }
 
 .app-header h1 {
-  font-size: clamp(2rem, 5vw, 3.5rem);
+  font-size: clamp(2rem, 5vw, 3.4rem);
 }
 
 .app-header p,
@@ -122,48 +149,46 @@ label {
 }
 
 .project-sidebar,
-.song-editor,
 .project-editor,
-.song-card {
+.panel-section,
+.song-card,
+.setlist-panel,
+.setlist-item {
   border: 1px solid #2d3833;
   border-radius: 8px;
   background: #181d20;
 }
 
-.project-sidebar {
-  display: grid;
-  gap: 18px;
+.project-sidebar,
+.project-editor,
+.panel-section,
+.setlist-panel {
   padding: 18px;
+}
+
+.project-sidebar,
+.form-stack,
+.project-editor,
+.panel-section,
+.setlist-panel {
+  display: grid;
+  gap: 1rem;
 }
 
 .content-panel {
   min-height: 620px;
 }
 
-.form-stack,
-.project-editor,
-.song-editor {
+.project-list,
+.song-list,
+.show-list,
+.setlist {
   display: grid;
-  gap: 1rem;
+  gap: 0.8rem;
 }
 
-.form-stack h2 {
-  margin: 0;
-  font-size: 1.05rem;
-}
-
-.project-editor,
-.song-editor {
-  padding: 18px;
-  margin-bottom: 18px;
-}
-
-.project-list {
-  display: grid;
-  gap: 0.7rem;
-}
-
-.project-item {
+.project-item,
+.show-item {
   display: grid;
   gap: 0.35rem;
   width: 100%;
@@ -175,18 +200,24 @@ label {
 }
 
 .project-item:hover,
-.project-item.active {
+.project-item.active,
+.show-item:hover,
+.show-item.active {
   border-color: #44b78b;
   background: #20332d;
 }
 
 .project-item strong,
+.show-item strong,
 .song-card h3,
+.setlist-item strong,
 .section-header h2 {
   overflow-wrap: anywhere;
 }
 
-.project-item span {
+.project-item span,
+.show-item span,
+.setlist-item span {
   color: #94a59d;
   font-size: 0.9rem;
 }
@@ -196,16 +227,16 @@ label {
   align-items: start;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 18px;
+  margin-bottom: 0.25rem;
 }
 
 .section-header.compact {
-  margin-bottom: 8px;
+  margin-bottom: 0;
 }
 
-.songs-area {
+.management-grid {
   display: grid;
-  grid-template-columns: minmax(280px, 380px) 1fr;
+  grid-template-columns: minmax(320px, 1fr) minmax(320px, 1fr);
   gap: 18px;
   align-items: start;
 }
@@ -220,11 +251,6 @@ label {
   grid-column: 1 / -1;
 }
 
-.song-list {
-  display: grid;
-  gap: 0.8rem;
-}
-
 .song-card {
   display: flex;
   justify-content: space-between;
@@ -233,7 +259,8 @@ label {
 }
 
 .song-card h3,
-.song-card p {
+.song-card p,
+.setlist-item p {
   margin: 0;
 }
 
@@ -251,10 +278,24 @@ label {
   white-space: pre-wrap;
 }
 
-.song-actions {
+.song-actions,
+.setlist-actions {
   display: flex;
   align-items: start;
   gap: 0.6rem;
+}
+
+.add-song-form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.setlist-item {
+  display: grid;
+  gap: 0.55rem;
+  padding: 1rem;
 }
 
 .secondary-button {
@@ -288,14 +329,28 @@ label {
   text-align: center;
 }
 
-.empty-panel p {
+.empty-panel p,
+.form-error {
   margin: 0.5rem 0 0;
 }
 
-@media (max-width: 920px) {
+.form-error {
+  color: #ff8b83;
+  font-weight: 800;
+}
+
+@media (max-width: 1060px) {
   .workspace,
-  .songs-area {
+  .management-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .login-shell,
+  .app-shell {
+    width: min(100% - 20px, 1180px);
+    padding: 18px 0;
   }
 
   .app-header,
@@ -305,33 +360,28 @@ label {
     flex-direction: column;
   }
 
-  .song-actions {
-    flex-wrap: wrap;
-  }
-}
-
-@media (max-width: 620px) {
-  .app-shell {
-    width: min(100% - 20px, 1180px);
-    padding: 18px 0;
-  }
-
-  .app-header {
-    margin-bottom: 18px;
-  }
-
   .project-sidebar,
   .project-editor,
-  .song-editor,
-  .song-card {
+  .panel-section,
+  .song-card,
+  .setlist-panel,
+  .setlist-item,
+  .login-card {
     padding: 14px;
   }
 
-  .song-grid {
+  .song-grid,
+  .add-song-form {
     grid-template-columns: 1fr;
   }
 
   .song-actions,
+  .setlist-actions {
+    flex-wrap: wrap;
+  }
+
+  .song-actions,
+  .setlist-actions,
   button {
     width: 100%;
   }
