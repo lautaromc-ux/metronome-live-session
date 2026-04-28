@@ -1,7 +1,11 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { deleteTrackFile, getTrackFile, saveTrackFile } from "./audioStorage";
+import { LiveAudioEngine, type AudioChannelMode } from "./liveAudio";
 import {
+  createProjectsBackup,
   loadAdminSession,
   loadProjects,
+  parseProjectsBackup,
   saveAdminSession,
   saveProjects
 } from "./storage";
@@ -27,7 +31,13 @@ const emptySongForm: SongForm = {
   timeSignatureNumerator: 4,
   timeSignatureDenominator: 4,
   countInBars: 1,
-  notes: ""
+  notes: "",
+  trackFileId: "",
+  trackFileName: "",
+  trackDuration: 0,
+  trackEnabled: false,
+  trackVolume: 1,
+  clickVolume: 1
 };
 
 const emptyShowForm: ShowForm = {
@@ -61,8 +71,46 @@ function normalizeSongForm(form: SongForm): SongForm {
     timeSignatureNumerator: clampNumber(form.timeSignatureNumerator, 1, 16),
     timeSignatureDenominator: denominator,
     countInBars: clampNumber(form.countInBars, 0, 8),
-    notes: form.notes.trim()
+    notes: form.notes.trim(),
+    trackFileId: form.trackFileId,
+    trackFileName: form.trackFileName,
+    trackDuration: form.trackDuration,
+    trackEnabled: Boolean(form.trackEnabled && form.trackFileId),
+    trackVolume: Math.min(Math.max(form.trackVolume, 0), 1),
+    clickVolume: Math.min(Math.max(form.clickVolume, 0), 1)
   };
+}
+
+function isAllowedAudioFile(file: File) {
+  const allowedExtensions = [".mp3", ".wav", ".m4a", ".aac"];
+  const lowerName = file.name.toLowerCase();
+  const hasAllowedExtension = allowedExtensions.some((extension) => lowerName.endsWith(extension));
+
+  return hasAllowedExtension && (file.type === "" || file.type.startsWith("audio/"));
+}
+
+async function getAudioDuration(file: File) {
+  const context = new AudioContext();
+
+  try {
+    const buffer = await context.decodeAudioData(await file.arrayBuffer());
+    return buffer.duration;
+  } finally {
+    await context.close();
+  }
+}
+
+function formatDuration(seconds: number) {
+  if (!seconds) {
+    return "";
+  }
+
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.round(seconds % 60)
+    .toString()
+    .padStart(2, "0");
+
+  return `${minutes}:${remainingSeconds}`;
 }
 
 function formatDateTime(value: string) {
@@ -97,6 +145,15 @@ export default function App() {
   const [showMode, setShowMode] = useState<ShowMode>({ type: "create" });
   const [showForm, setShowForm] = useState<ShowForm>(emptyShowForm);
   const [songToAddId, setSongToAddId] = useState("");
+  const [trackError, setTrackError] = useState("");
+  const [liveSongId, setLiveSongId] = useState("");
+  const [channelMode, setChannelMode] = useState<AudioChannelMode>("normal");
+  const [isLivePlaying, setIsLivePlaying] = useState(false);
+  const [liveStatus, setLiveStatus] = useState("Listo para probar salida.");
+  const [liveError, setLiveError] = useState("");
+  const [backupStatus, setBackupStatus] = useState("");
+  const [backupError, setBackupError] = useState("");
+  const liveAudioRef = useRef<LiveAudioEngine | null>(null);
 
   const selectedProject = useMemo(() => {
     return projects.find((project) => project.id === selectedProjectId) ?? projects[0] ?? null;
@@ -128,6 +185,10 @@ export default function App() {
     return selectedProject.songs.filter((song) => !selectedShow.songIds.includes(song.id));
   }, [selectedProject, selectedShow]);
 
+  const liveSong = useMemo(() => {
+    return selectedShowSongs.find((song) => song.id === liveSongId) ?? selectedShowSongs[0] ?? null;
+  }, [liveSongId, selectedShowSongs]);
+
   useEffect(() => {
     saveProjects(projects);
   }, [projects]);
@@ -156,6 +217,7 @@ export default function App() {
     });
     setSongMode({ type: "create" });
     setSongForm(emptySongForm);
+    setTrackError("");
 
     if (!selectedShowId || !selectedProject.shows.some((show) => show.id === selectedShowId)) {
       setSelectedShowId(selectedProject.shows[0]?.id ?? null);
@@ -165,6 +227,27 @@ export default function App() {
   useEffect(() => {
     setSongToAddId(availableSongsForShow[0]?.id ?? "");
   }, [availableSongsForShow]);
+
+  useEffect(() => {
+    if (!liveSongId || !selectedShowSongs.some((song) => song.id === liveSongId)) {
+      setLiveSongId(selectedShowSongs[0]?.id ?? "");
+    }
+  }, [liveSongId, selectedShowSongs]);
+
+  useEffect(() => {
+    if (!liveAudioRef.current) {
+      liveAudioRef.current = new LiveAudioEngine();
+    }
+
+    return () => {
+      void liveAudioRef.current?.stop();
+    };
+  }, []);
+
+  useEffect(() => {
+    void liveAudioRef.current?.stop();
+    setIsLivePlaying(false);
+  }, [liveSong?.id]);
 
   function updateProject(projectId: string, updater: (project: Project) => Project) {
     setProjects((currentProjects) =>
@@ -196,6 +279,64 @@ export default function App() {
   function handleLogout() {
     setIsLoggedIn(false);
     saveAdminSession(false);
+  }
+
+  function handleExportBackup() {
+    const backup = createProjectsBackup(projects);
+    const backupJson = JSON.stringify(backup, null, 2);
+    const blob = new Blob([backupJson], { type: "application/json" });
+    const link = document.createElement("a");
+    const date = new Date().toISOString().slice(0, 10);
+
+    link.href = URL.createObjectURL(blob);
+    link.download = `metronomo-live-backup-${date}.json`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+    setBackupError("");
+    setBackupStatus("Backup exportado. No incluye archivos de audio.");
+  }
+
+  async function handleImportBackup(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    if (!file.name.toLowerCase().endsWith(".json")) {
+      setBackupError("Elegí un archivo JSON exportado desde esta app.");
+      setBackupStatus("");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Importar este backup reemplaza los proyectos de este dispositivo. Las pistas de audio no se importan. Continuar?"
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      const importedProjects = parseProjectsBackup(await file.text());
+
+      if (importedProjects.length === 0) {
+        setBackupError("El backup no tiene proyectos para importar.");
+        setBackupStatus("");
+        return;
+      }
+
+      setProjects(importedProjects);
+      saveProjects(importedProjects);
+      setSelectedProjectId(importedProjects[0]?.id ?? null);
+      setSelectedShowId(importedProjects[0]?.shows[0]?.id ?? null);
+      setBackupError("");
+      setBackupStatus("Backup importado. Las pistas de audio quedan vacias en este dispositivo.");
+    } catch {
+      setBackupError("No se pudo importar el backup. Revisá que sea un JSON válido.");
+      setBackupStatus("");
+    }
   }
 
   function handleCreateProject(event: FormEvent<HTMLFormElement>) {
@@ -305,11 +446,18 @@ export default function App() {
       timeSignatureNumerator: song.timeSignatureNumerator,
       timeSignatureDenominator: song.timeSignatureDenominator,
       countInBars: song.countInBars,
-      notes: song.notes
+      notes: song.notes,
+      trackFileId: song.trackFileId,
+      trackFileName: song.trackFileName,
+      trackDuration: song.trackDuration,
+      trackEnabled: song.trackEnabled,
+      trackVolume: song.trackVolume,
+      clickVolume: song.clickVolume
     });
+    setTrackError("");
   }
 
-  function handleDeleteSong(songId: string) {
+  async function handleDeleteSong(songId: string) {
     if (!selectedProject) {
       return;
     }
@@ -319,6 +467,12 @@ export default function App() {
 
     if (!confirmed) {
       return;
+    }
+
+    try {
+      await deleteTrackFile(songId);
+    } catch {
+      // Metadata removal must still work if IndexedDB cleanup fails.
     }
 
     updateProject(selectedProject.id, (project) => ({
@@ -335,6 +489,167 @@ export default function App() {
       setSongMode({ type: "create" });
       setSongForm(emptySongForm);
     }
+  }
+
+  function updateSong(songId: string, updater: (song: Song) => Song) {
+    if (!selectedProject) {
+      return;
+    }
+
+    updateProject(selectedProject.id, (project) => ({
+      ...project,
+      songs: project.songs.map((song) => (song.id === songId ? updater(song) : song))
+    }));
+  }
+
+  async function handleTrackFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file || songMode.type !== "edit") {
+      return;
+    }
+
+    if (!isAllowedAudioFile(file)) {
+      setTrackError("Formato no permitido. Usá mp3, wav, m4a o aac.");
+      return;
+    }
+
+    try {
+      setTrackError("");
+      const duration = await getAudioDuration(file);
+      await saveTrackFile(songMode.songId, file);
+      const nextTrackData = {
+        trackFileId: songMode.songId,
+        trackFileName: file.name,
+        trackDuration: duration,
+        trackEnabled: true
+      };
+
+      setSongForm((current) => ({
+        ...current,
+        ...nextTrackData
+      }));
+      updateSong(songMode.songId, (song) => ({
+        ...song,
+        ...nextTrackData
+      }));
+    } catch {
+      setTrackError("No se pudo cargar esa pista. La canción puede seguir solo con click.");
+    }
+  }
+
+  async function handleDeleteTrack() {
+    if (songMode.type !== "edit" || !songForm.trackFileId) {
+      return;
+    }
+
+    const confirmed = window.confirm(`Eliminar la pista "${songForm.trackFileName}"?`);
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await deleteTrackFile(songMode.songId);
+      const emptyTrackData = {
+        trackFileId: "",
+        trackFileName: "",
+        trackDuration: 0,
+        trackEnabled: false
+      };
+
+      setSongForm((current) => ({
+        ...current,
+        ...emptyTrackData
+      }));
+      updateSong(songMode.songId, (song) => ({
+        ...song,
+        ...emptyTrackData
+      }));
+      setTrackError("");
+    } catch {
+      setTrackError("No se pudo eliminar la pista.");
+    }
+  }
+
+  function handleSongVolumeChange(
+    songId: string,
+    field: "trackVolume" | "clickVolume",
+    value: number
+  ) {
+    const nextValue = Math.min(Math.max(value, 0), 1);
+
+    updateSong(songId, (song) => ({
+      ...song,
+      [field]: nextValue
+    }));
+
+    if (liveSong?.id === songId) {
+      const nextTrackVolume = field === "trackVolume" ? nextValue : liveSong.trackVolume;
+      const nextClickVolume = field === "clickVolume" ? nextValue : liveSong.clickVolume;
+      liveAudioRef.current?.setVolumes(nextTrackVolume, nextClickVolume);
+    }
+  }
+
+  async function handleStartLiveSong() {
+    if (!liveSong || !liveAudioRef.current) {
+      return;
+    }
+
+    setLiveError("");
+    setLiveStatus("Preparando audio...");
+
+    let trackFile: File | null = null;
+
+    if (liveSong.trackEnabled && liveSong.trackFileId) {
+      try {
+        trackFile = await getTrackFile(liveSong.id);
+
+        if (!trackFile) {
+          setLiveError("No se encontró la pista guardada. Sale solo click.");
+        }
+      } catch {
+        setLiveError("No se pudo leer la pista. Sale solo click.");
+      }
+    }
+
+    try {
+      await liveAudioRef.current.start({
+        song: liveSong,
+        trackFile,
+        channelMode
+      });
+      setIsLivePlaying(true);
+      setLiveStatus(trackFile ? "Pista + click en reproducción." : "Click solo en reproducción.");
+    } catch {
+      try {
+        await liveAudioRef.current.start({
+          song: liveSong,
+          trackFile: null,
+          channelMode
+        });
+        setIsLivePlaying(true);
+        setLiveError("La pista falló. Se inició solo el click.");
+        setLiveStatus("Click solo en reproducción.");
+      } catch {
+        setIsLivePlaying(false);
+        setLiveError("No se pudo iniciar el audio.");
+        setLiveStatus("Revisá permisos de audio del navegador.");
+      }
+    }
+  }
+
+  async function handleStopLiveSong() {
+    await liveAudioRef.current?.stop();
+    setIsLivePlaying(false);
+    setLiveStatus("Detenido.");
+  }
+
+  function handleToggleChannelMode() {
+    const nextMode: AudioChannelMode = channelMode === "normal" ? "inverted" : "normal";
+    setChannelMode(nextMode);
+    liveAudioRef.current?.setChannelMode(nextMode);
   }
 
   function handleShowSubmit(event: FormEvent<HTMLFormElement>) {
@@ -534,6 +849,14 @@ export default function App() {
         </button>
       </header>
 
+      <section className="local-data-notice">
+        <strong>Datos locales</strong>
+        <span>
+          Los proyectos, canciones y shows se guardan en este dispositivo. Para pasar datos a otro
+          celular, usá exportar/importar backup. Las pistas de audio no se incluyen.
+        </span>
+      </section>
+
       <div className="workspace">
         <aside className="project-sidebar" aria-label="Proyectos y bandas">
           <form className="form-stack" onSubmit={handleCreateProject}>
@@ -568,6 +891,23 @@ export default function App() {
             </label>
             <button type="submit">Crear proyecto</button>
           </form>
+
+          <section className="backup-panel">
+            <div>
+              <span className="section-label">Backup</span>
+              <h2>Exportar / importar</h2>
+              <p>Incluye proyectos, canciones y shows. No incluye archivos de audio.</p>
+            </div>
+            <button type="button" onClick={handleExportBackup}>
+              Exportar JSON
+            </button>
+            <label className="file-button secondary-file-button">
+              Importar JSON
+              <input accept=".json,application/json" type="file" onChange={handleImportBackup} />
+            </label>
+            {backupStatus && <p className="backup-status">{backupStatus}</p>}
+            {backupError && <p className="form-error">{backupError}</p>}
+          </section>
 
           <div className="project-list">
             {projects.length === 0 ? (
@@ -753,6 +1093,91 @@ export default function App() {
                       </label>
                     </div>
 
+                    <div className="track-panel">
+                      <div>
+                        <span className="section-label">Pista de audio</span>
+                        {songForm.trackFileName ? (
+                          <p>
+                            {songForm.trackFileName}
+                            {songForm.trackDuration ? ` · ${formatDuration(songForm.trackDuration)}` : ""}
+                          </p>
+                        ) : (
+                          <p>Sin pista cargada.</p>
+                        )}
+                      </div>
+
+                      {songMode.type === "edit" ? (
+                        <div className="track-actions">
+                          <label className="file-button">
+                            {songForm.trackFileName ? "Reemplazar pista" : "Agregar pista"}
+                            <input
+                              accept=".mp3,.wav,.m4a,.aac,audio/*"
+                              type="file"
+                              onChange={handleTrackFileChange}
+                            />
+                          </label>
+                          {songForm.trackFileName && (
+                            <button className="danger-button" type="button" onClick={handleDeleteTrack}>
+                              Eliminar pista
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="empty-state">Guardá la canción para cargar una pista.</p>
+                      )}
+
+                      {trackError && <p className="form-error">{trackError}</p>}
+
+                      <label className="switch-row">
+                        <input
+                          checked={songForm.trackEnabled}
+                          disabled={!songForm.trackFileId}
+                          type="checkbox"
+                          onChange={(event) =>
+                            setSongForm((current) => ({
+                              ...current,
+                              trackEnabled: event.target.checked
+                            }))
+                          }
+                        />
+                        Activar pista
+                      </label>
+
+                      <label>
+                        Volumen pista: {Math.round(songForm.trackVolume * 100)}%
+                        <input
+                          min={0}
+                          max={1}
+                          step={0.01}
+                          type="range"
+                          value={songForm.trackVolume}
+                          onChange={(event) =>
+                            setSongForm((current) => ({
+                              ...current,
+                              trackVolume: Number(event.target.value)
+                            }))
+                          }
+                        />
+                      </label>
+
+                      <label>
+                        Volumen click: {Math.round(songForm.clickVolume * 100)}%
+                        <input
+                          min={0}
+                          max={1}
+                          step={0.01}
+                          type="range"
+                          value={songForm.clickVolume}
+                          onChange={(event) =>
+                            setSongForm((current) => ({
+                              ...current,
+                              clickVolume: Number(event.target.value)
+                            }))
+                          }
+                        />
+                      </label>
+                    </div>
+
                     <button type="submit">
                       {songMode.type === "edit" ? "Guardar canción" : "Crear canción"}
                     </button>
@@ -769,6 +1194,13 @@ export default function App() {
                             <p>
                               {song.bpm} BPM · Compás {song.timeSignatureNumerator}/
                               {song.timeSignatureDenominator} · Count-in {song.countInBars}
+                            </p>
+                            <p>
+                              {song.trackFileName
+                                ? `Pista ${song.trackEnabled ? "activa" : "apagada"} · ${
+                                    song.trackFileName
+                                  }`
+                                : "Solo click"}
                             </p>
                             {song.notes && <p className="song-notes">{song.notes}</p>}
                           </div>
@@ -929,7 +1361,12 @@ export default function App() {
                           <p className="empty-state">Este show todavía no tiene canciones.</p>
                         ) : (
                           selectedShowSongs.map((song, index) => (
-                            <article className="setlist-item" key={song.id}>
+                            <article
+                              className={
+                                song.id === liveSong?.id ? "setlist-item active" : "setlist-item"
+                              }
+                              key={song.id}
+                            >
                               <strong>
                                 {index + 1}. {song.title}
                               </strong>
@@ -938,6 +1375,12 @@ export default function App() {
                                 {song.timeSignatureDenominator}
                               </span>
                               <div className="setlist-actions">
+                                <button
+                                  type="button"
+                                  onClick={() => setLiveSongId(song.id)}
+                                >
+                                  Vivo
+                                </button>
                                 <button
                                   className="secondary-button"
                                   type="button"
@@ -966,6 +1409,116 @@ export default function App() {
                           ))
                         )}
                       </div>
+
+                      <div className="live-panel">
+                        <div>
+                          <span className="section-label">Modo Vivo</span>
+                          <h2>{liveSong?.title ?? "Sin canción seleccionada"}</h2>
+                          <p>
+                            {channelMode === "normal" ? "Pista L / Click R" : "Pista R / Click L"}
+                          </p>
+                        </div>
+
+                        {liveSong ? (
+                          <>
+                            <label>
+                              Canción
+                              <select
+                                value={liveSong.id}
+                                onChange={(event) => setLiveSongId(event.target.value)}
+                              >
+                                {selectedShowSongs.map((song) => (
+                                  <option key={song.id} value={song.id}>
+                                    {song.title}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+
+                            <div className="live-status">
+                              <strong>
+                                {liveSong.trackFileName && liveSong.trackEnabled
+                                  ? `Pista activa: ${liveSong.trackFileName}`
+                                  : "Solo click"}
+                              </strong>
+                              <span>{liveStatus}</span>
+                              {liveError && <span className="form-error">{liveError}</span>}
+                            </div>
+
+                            <label>
+                              Volumen pista: {Math.round(liveSong.trackVolume * 100)}%
+                              <input
+                                min={0}
+                                max={1}
+                                step={0.01}
+                                type="range"
+                                value={liveSong.trackVolume}
+                                onChange={(event) =>
+                                  handleSongVolumeChange(
+                                    liveSong.id,
+                                    "trackVolume",
+                                    Number(event.target.value)
+                                  )
+                                }
+                              />
+                            </label>
+
+                            <label>
+                              Volumen click: {Math.round(liveSong.clickVolume * 100)}%
+                              <input
+                                min={0}
+                                max={1}
+                                step={0.01}
+                                type="range"
+                                value={liveSong.clickVolume}
+                                onChange={(event) =>
+                                  handleSongVolumeChange(
+                                    liveSong.id,
+                                    "clickVolume",
+                                    Number(event.target.value)
+                                  )
+                                }
+                              />
+                            </label>
+
+                            <div className="live-actions">
+                              <button type="button" onClick={handleStartLiveSong}>
+                                {isLivePlaying ? "Reiniciar" : "Iniciar"}
+                              </button>
+                              <button
+                                className="danger-button"
+                                type="button"
+                                onClick={handleStopLiveSong}
+                              >
+                                Stop
+                              </button>
+                              <button
+                                className="secondary-button"
+                                type="button"
+                                onClick={handleToggleChannelMode}
+                              >
+                                Invertir canales
+                              </button>
+                              <button
+                                className="secondary-button"
+                                type="button"
+                                onClick={() => liveAudioRef.current?.testChannel("left")}
+                              >
+                                Test L
+                              </button>
+                              <button
+                                className="secondary-button"
+                                type="button"
+                                onClick={() => liveAudioRef.current?.testChannel("right")}
+                              >
+                                Test R
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <p className="empty-state">Agregá canciones al show para usar Modo Vivo.</p>
+                        )}
+                      </div>
                     </div>
                   )}
                 </section>
@@ -982,4 +1535,3 @@ export default function App() {
     </main>
   );
 }
-

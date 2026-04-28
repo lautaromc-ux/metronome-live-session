@@ -6,6 +6,12 @@ export type Song = {
   timeSignatureDenominator: number;
   countInBars: number;
   notes: string;
+  trackFileId: string;
+  trackFileName: string;
+  trackDuration: number;
+  trackEnabled: boolean;
+  trackVolume: number;
+  clickVolume: number;
 };
 
 export type Show = {

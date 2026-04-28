@@ -67,6 +67,15 @@ select {
   padding: 0.8rem 0.9rem;
 }
 
+input[type="range"] {
+  padding: 0;
+}
+
+input[type="checkbox"] {
+  min-height: auto;
+  width: auto;
+}
+
 textarea {
   resize: vertical;
 }
@@ -83,7 +92,7 @@ label {
 .app-shell {
   width: min(1180px, calc(100% - 32px));
   margin: 0 auto;
-  padding: 28px 0;
+  padding: 28px 0 calc(28px + env(safe-area-inset-bottom));
 }
 
 .login-shell {
@@ -113,6 +122,21 @@ label {
   justify-content: space-between;
   gap: 1rem;
   margin-bottom: 24px;
+}
+
+.local-data-notice {
+  display: grid;
+  gap: 0.35rem;
+  border: 1px solid #3d3320;
+  border-radius: 8px;
+  background: #211d13;
+  color: #f6e4b6;
+  margin-bottom: 20px;
+  padding: 1rem;
+}
+
+.local-data-notice span {
+  color: #d8c797;
 }
 
 .app-header h1,
@@ -153,7 +177,10 @@ label {
 .panel-section,
 .song-card,
 .setlist-panel,
-.setlist-item {
+.setlist-item,
+.track-panel,
+.live-panel,
+.backup-panel {
   border: 1px solid #2d3833;
   border-radius: 8px;
   background: #181d20;
@@ -162,7 +189,8 @@ label {
 .project-sidebar,
 .project-editor,
 .panel-section,
-.setlist-panel {
+.setlist-panel,
+.backup-panel {
   padding: 18px;
 }
 
@@ -170,9 +198,25 @@ label {
 .form-stack,
 .project-editor,
 .panel-section,
-.setlist-panel {
+.setlist-panel,
+.backup-panel {
   display: grid;
   gap: 1rem;
+}
+
+.backup-panel h2,
+.backup-panel p {
+  margin: 0.35rem 0 0;
+}
+
+.backup-panel p {
+  color: #94a59d;
+}
+
+.backup-status {
+  color: #91e3bd !important;
+  font-weight: 800;
+  margin: 0;
 }
 
 .content-panel {
@@ -298,6 +342,76 @@ label {
   padding: 1rem;
 }
 
+.setlist-item.active {
+  border-color: #f2b84b;
+  background: #24281f;
+}
+
+.track-panel,
+.live-panel {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1rem;
+}
+
+.track-panel p,
+.live-panel p {
+  margin: 0.35rem 0 0;
+  color: #94a59d;
+}
+
+.track-actions,
+.live-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.file-button {
+  min-height: 48px;
+  border-radius: 8px;
+  background: #44b78b;
+  color: #07110d;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  padding: 0.85rem 1.1rem;
+}
+
+.secondary-file-button {
+  background: #2a3336;
+  color: #f4f7f5;
+}
+
+.file-button input {
+  display: none;
+}
+
+.switch-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.live-panel {
+  background: #151b1d;
+}
+
+.live-status {
+  display: grid;
+  gap: 0.3rem;
+  border: 1px solid #2d3833;
+  border-radius: 8px;
+  background: #101517;
+  padding: 0.9rem;
+}
+
+.live-status span {
+  color: #94a59d;
+}
+
 .secondary-button {
   background: #2a3336;
   color: #f4f7f5;
@@ -350,7 +464,7 @@ label {
   .login-shell,
   .app-shell {
     width: min(100% - 20px, 1180px);
-    padding: 18px 0;
+    padding: 18px 0 calc(18px + env(safe-area-inset-bottom));
   }
 
   .app-header,
@@ -366,6 +480,9 @@ label {
   .song-card,
   .setlist-panel,
   .setlist-item,
+  .track-panel,
+  .live-panel,
+  .backup-panel,
   .login-card {
     padding: 14px;
   }
@@ -376,14 +493,18 @@ label {
   }
 
   .song-actions,
-  .setlist-actions {
+  .setlist-actions,
+  .track-actions,
+  .live-actions {
     flex-wrap: wrap;
   }
 
   .song-actions,
   .setlist-actions,
+  .track-actions,
+  .live-actions,
+  .file-button,
   button {
     width: 100%;
   }
 }
-

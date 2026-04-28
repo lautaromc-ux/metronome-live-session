@@ -10,6 +10,16 @@ npm run dev
 npm run build
 ```
 
+## Audio en vivo
+
+Ver [docs/AUDIO.md](docs/AUDIO.md).
+
+## Backup
+
+- `Exportar JSON` guarda proyectos, canciones y shows.
+- `Importar JSON` reemplaza los datos del dispositivo.
+- Los archivos de audio no se incluyen en el backup.
+
 ## Publicar online
 
 ### GitHub Pages
