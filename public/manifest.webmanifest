@@ -1,0 +1,10 @@
+{
+  "name": "metronomo-live",
+  "short_name": "metronomo-live",
+  "start_url": "./",
+  "display": "fullscreen",
+  "background_color": "#0b0f10",
+  "theme_color": "#0b0f10",
+  "orientation": "any",
+  "icons": []
+}

@@ -210,11 +210,13 @@ export default function App() {
   const [liveElapsed, setLiveElapsed] = useState(0);
   const [liveDuration, setLiveDuration] = useState(0);
   const [isLiveTrackEnded, setIsLiveTrackEnded] = useState(false);
+  const [isLiveFullscreen, setIsLiveFullscreen] = useState(false);
   const [liveStatus, setLiveStatus] = useState("Listo para probar salida.");
   const [liveError, setLiveError] = useState("");
   const [backupStatus, setBackupStatus] = useState("");
   const [backupError, setBackupError] = useState("");
   const liveAudioRef = useRef<LiveAudioEngine | null>(null);
+  const liveStageRef = useRef<HTMLElement | null>(null);
 
   const selectedProject = useMemo(() => {
     return projects.find((project) => project.id === selectedProjectId) ?? projects[0] ?? null;
@@ -322,6 +324,15 @@ export default function App() {
     return () => {
       void liveAudioRef.current?.stop();
     };
+  }, []);
+
+  useEffect(() => {
+    function handleFullscreenChange() {
+      setIsLiveFullscreen(Boolean(document.fullscreenElement));
+    }
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
   }, []);
 
   useEffect(() => {
@@ -965,6 +976,34 @@ export default function App() {
     const nextMode: AudioChannelMode = channelMode === "normal" ? "inverted" : "normal";
     setChannelMode(nextMode);
     liveAudioRef.current?.setChannelMode(nextMode);
+  }
+
+  async function handleToggleFullscreen() {
+    const target = liveStageRef.current;
+
+    if (!target) {
+      return;
+    }
+
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+        setIsLiveFullscreen(false);
+        return;
+      }
+
+      if (!target.requestFullscreen) {
+        setIsLiveFullscreen(true);
+        setLiveStatus("Modo escenario activo. En iPhone, para pantalla completa real usá Agregar a inicio.");
+        return;
+      }
+
+      await target.requestFullscreen();
+      setIsLiveFullscreen(true);
+    } catch {
+      setIsLiveFullscreen(true);
+      setLiveStatus("Modo escenario activo. Si Safari no permite fullscreen, agregá la app a inicio.");
+    }
   }
 
   function handleShowSubmit(event: FormEvent<HTMLFormElement>) {
@@ -1708,16 +1747,24 @@ export default function App() {
 
   if (appScreen === "live" && selectedProject && selectedShow) {
     return (
-      <main className="live-stage-shell">
+      <main
+        className={isLiveFullscreen ? "live-stage-shell stage-fullscreen" : "live-stage-shell"}
+        ref={liveStageRef}
+      >
         <header className="live-stage-header">
           <div>
             <span className="app-kicker">{selectedProject.name}</span>
             <h1>{selectedShow.title}</h1>
             <p>{formatShowDate(selectedShow.date)}</p>
           </div>
-          <button className="secondary-button" type="button" onClick={() => void handleCloseLiveView()}>
-            Volver
-          </button>
+          <div className="live-header-actions">
+            <button className="secondary-button" type="button" onClick={() => void handleToggleFullscreen()}>
+              {isLiveFullscreen ? "Salir pantalla completa" : "Pantalla completa"}
+            </button>
+            <button className="secondary-button" type="button" onClick={() => void handleCloseLiveView()}>
+              Volver
+            </button>
+          </div>
         </header>
 
         {liveSong ? (
