@@ -16,7 +16,7 @@ type SongForm = Omit<Song, "id">;
 type ShowForm = Pick<Show, "title" | "date" | "notes">;
 type SongMode = { type: "create" } | { type: "edit"; songId: string };
 type ShowMode = { type: "create" } | { type: "edit"; showId: string };
-type AppScreen = "dashboard" | "project" | "show" | "live";
+type AppScreen = "dashboard" | "project" | "show" | "live" | "rehearsal";
 
 const adminName = "Lautaro MC";
 const adminPassword = "metro2026";
@@ -175,6 +175,22 @@ function describePlayback(song: Song) {
   return "Audio apagado";
 }
 
+function isCoverSong(song: Song) {
+  const optionalCoverFields = song as Song & {
+    cover?: boolean;
+    isCover?: boolean;
+    songType?: string;
+    type?: string;
+  };
+
+  return Boolean(
+    optionalCoverFields.cover ||
+      optionalCoverFields.isCover ||
+      optionalCoverFields.songType === "cover" ||
+      optionalCoverFields.type === "cover"
+  );
+}
+
 function formatShowDate(value: string) {
   if (!value) {
     return "Sin fecha";
@@ -196,10 +212,13 @@ export default function App() {
   const [selectedShowId, setSelectedShowId] = useState<string | null>(null);
   const [newProjectForm, setNewProjectForm] = useState<ProjectForm>(emptyProjectForm);
   const [projectForm, setProjectForm] = useState<ProjectForm>(emptyProjectForm);
+  const [isProjectEditorOpen, setIsProjectEditorOpen] = useState(false);
   const [songMode, setSongMode] = useState<SongMode>({ type: "create" });
   const [songForm, setSongForm] = useState<SongForm>(emptySongForm);
+  const [isSongEditorOpen, setIsSongEditorOpen] = useState(false);
   const [showMode, setShowMode] = useState<ShowMode>({ type: "create" });
   const [showForm, setShowForm] = useState<ShowForm>(emptyShowForm);
+  const [isShowCreatorOpen, setIsShowCreatorOpen] = useState(false);
   const [songToAddId, setSongToAddId] = useState("");
   const [trackError, setTrackError] = useState("");
   const [liveSongId, setLiveSongId] = useState("");
@@ -240,6 +259,13 @@ export default function App() {
       .filter((song): song is Song => Boolean(song));
   }, [selectedProject, selectedShow]);
 
+  const rehearsalSongs = useMemo(() => {
+    return selectedProject?.songs.filter((song) => !isCoverSong(song)) ?? [];
+  }, [selectedProject]);
+
+  const activePlaybackSongs = appScreen === "rehearsal" ? rehearsalSongs : selectedShowSongs;
+  const isPlaybackScreen = appScreen === "live" || appScreen === "rehearsal";
+
   const availableSongsForShow = useMemo(() => {
     if (!selectedProject || !selectedShow) {
       return [];
@@ -249,16 +275,16 @@ export default function App() {
   }, [selectedProject, selectedShow]);
 
   const liveSong = useMemo(() => {
-    return selectedShowSongs.find((song) => song.id === liveSongId) ?? selectedShowSongs[0] ?? null;
-  }, [liveSongId, selectedShowSongs]);
+    return activePlaybackSongs.find((song) => song.id === liveSongId) ?? activePlaybackSongs[0] ?? null;
+  }, [activePlaybackSongs, liveSongId]);
 
   const liveSongIndex = useMemo(() => {
-    return liveSong ? selectedShowSongs.findIndex((song) => song.id === liveSong.id) : -1;
-  }, [liveSong, selectedShowSongs]);
+    return liveSong ? activePlaybackSongs.findIndex((song) => song.id === liveSong.id) : -1;
+  }, [activePlaybackSongs, liveSong]);
 
   const nextLiveSong = useMemo(() => {
-    return liveSongIndex >= 0 ? selectedShowSongs[liveSongIndex + 1] ?? null : null;
-  }, [liveSongIndex, selectedShowSongs]);
+    return liveSongIndex >= 0 ? activePlaybackSongs[liveSongIndex + 1] ?? null : null;
+  }, [activePlaybackSongs, liveSongIndex]);
 
   const liveStageState = isLivePlaying
     ? "PLAYING"
@@ -311,10 +337,10 @@ export default function App() {
   }, [availableSongsForShow]);
 
   useEffect(() => {
-    if (!liveSongId || !selectedShowSongs.some((song) => song.id === liveSongId)) {
-      setLiveSongId(selectedShowSongs[0]?.id ?? "");
+    if (!liveSongId || !activePlaybackSongs.some((song) => song.id === liveSongId)) {
+      setLiveSongId(activePlaybackSongs[0]?.id ?? "");
     }
-  }, [liveSongId, selectedShowSongs]);
+  }, [activePlaybackSongs, liveSongId]);
 
   useEffect(() => {
     if (!liveAudioRef.current) {
@@ -347,7 +373,7 @@ export default function App() {
   }, [liveSong?.id]);
 
   useEffect(() => {
-    if (appScreen !== "live" || !liveSong) {
+    if (!isPlaybackScreen || !liveSong) {
       return;
     }
 
@@ -373,7 +399,7 @@ export default function App() {
     }, 200);
 
     return () => window.clearInterval(timer);
-  }, [appScreen, isLivePlaying, liveSong]);
+  }, [isLivePlaying, isPlaybackScreen, liveSong]);
 
   function updateProject(projectId: string, updater: (project: Project) => Project) {
     setProjects((currentProjects) =>
@@ -411,6 +437,11 @@ export default function App() {
   function handleOpenProject(projectId: string) {
     setSelectedProjectId(projectId);
     setSelectedShowId(null);
+    setIsProjectEditorOpen(false);
+    setIsShowCreatorOpen(false);
+    setIsSongEditorOpen(false);
+    setSongMode({ type: "create" });
+    setSongForm(emptySongForm);
     setAppScreen("project");
   }
 
@@ -531,6 +562,7 @@ export default function App() {
       name,
       description: projectForm.description.trim()
     }));
+    setIsProjectEditorOpen(false);
   }
 
   function handleDeleteProject() {
@@ -584,10 +616,12 @@ export default function App() {
 
     setSongMode({ type: "create" });
     setSongForm(emptySongForm);
+    setIsSongEditorOpen(false);
   }
 
   function handleEditSong(song: Song) {
     setSongMode({ type: "edit", songId: song.id });
+    setIsSongEditorOpen(true);
     setSongForm({
       title: song.title,
       bpm: song.bpm,
@@ -637,6 +671,7 @@ export default function App() {
     if (songMode.type === "edit" && songMode.songId === songId) {
       setSongMode({ type: "create" });
       setSongForm(emptySongForm);
+      setIsSongEditorOpen(false);
     }
   }
 
@@ -776,13 +811,33 @@ export default function App() {
     setAppScreen("live");
   }
 
+  function handleOpenRehearsalView() {
+    if (!selectedProject) {
+      return;
+    }
+
+    if (rehearsalSongs.length === 0) {
+      setLiveError("Este proyecto no tiene temas disponibles para ensayo.");
+      return;
+    }
+
+    setLiveSongId(rehearsalSongs[0].id);
+    setLiveElapsed(0);
+    setIsLivePlaying(false);
+    setIsLivePaused(false);
+    setIsLiveTrackEnded(false);
+    setLiveStatus("Listo para ensayar.");
+    setLiveError("");
+    setAppScreen("rehearsal");
+  }
+
   async function handleCloseLiveView() {
     await liveAudioRef.current?.stop();
     setIsLivePlaying(false);
     setIsLivePaused(false);
     setIsLiveTrackEnded(false);
     setLiveViewShowId(null);
-    setAppScreen("show");
+    setAppScreen(appScreen === "rehearsal" ? "project" : "show");
   }
 
   async function handleSelectLiveSong(songId: string) {
@@ -801,7 +856,7 @@ export default function App() {
       return;
     }
 
-    const nextSong = selectedShowSongs[liveSongIndex + direction];
+    const nextSong = activePlaybackSongs[liveSongIndex + direction];
 
     if (nextSong) {
       await handleSelectLiveSong(nextSong.id);
@@ -1056,6 +1111,7 @@ export default function App() {
 
     setShowMode({ type: "create" });
     setShowForm(emptyShowForm);
+    setIsShowCreatorOpen(false);
   }
 
   function handleEditShow(show: Show) {
@@ -1302,22 +1358,29 @@ export default function App() {
             <h1>{selectedProject.name}</h1>
             <p>{selectedProject.songs.length} temas · {selectedProject.shows.length} shows</p>
           </div>
-          <button className="secondary-button" type="button" onClick={() => void handleBackToDashboard()}>
-            Volver
-          </button>
+          <div className="project-header-actions">
+            <button
+              className="secondary-button compact-button"
+              type="button"
+              onClick={() => setIsProjectEditorOpen((current) => !current)}
+            >
+              {isProjectEditorOpen ? "Cerrar edición" : "Editar proyecto"}
+            </button>
+            <button className="secondary-button compact-button" type="button" onClick={() => void handleBackToDashboard()}>
+              Volver
+            </button>
+          </div>
         </header>
 
-        <div className="project-screen-grid">
-          <section className="panel-section">
+        <div className="project-detail-stack">
+          {isProjectEditorOpen && (
+          <section className="panel-section project-edit-panel">
             <form className="form-stack" onSubmit={handleSaveProject}>
               <div className="section-header compact">
                 <div>
                   <span className="section-label">Datos</span>
                   <h2>Proyecto</h2>
                 </div>
-                <button className="danger-button" type="button" onClick={handleDeleteProject}>
-                  Borrar
-                </button>
               </div>
               <label>
                 Nombre
@@ -1342,11 +1405,28 @@ export default function App() {
               <button type="submit">Guardar proyecto</button>
             </form>
           </section>
+          )}
 
           <section className="panel-section">
+            <div className="section-header compact">
+              <div>
+                <span className="section-label">Shows</span>
+                <h2>Shows</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMode({ type: "create" });
+                  setShowForm(emptyShowForm);
+                  setIsShowCreatorOpen((current) => !current);
+                }}
+              >
+                Crear show
+              </button>
+            </div>
+
+            {isShowCreatorOpen && (
             <form className="form-stack" onSubmit={handleShowSubmit}>
-              <span className="section-label">Shows</span>
-              <h2>Crear nuevo show</h2>
               <label>
                 Nombre
                 <input
@@ -1370,11 +1450,82 @@ export default function App() {
               </label>
               <button type="submit">Crear show</button>
             </form>
-          </section>
-        </div>
+            )}
 
-        <div className="management-grid">
+            <div className="show-list">
+              {selectedProject.shows.length === 0 ? (
+                <p className="empty-state">Todavía no hay shows.</p>
+              ) : (
+                selectedProject.shows.map((show) => (
+                  <article className="show-card" key={show.id}>
+                    <div>
+                      <strong>{show.title}</strong>
+                      <span>
+                        {formatShowDate(show.date)} · {show.songIds.length} canciones
+                      </span>
+                    </div>
+                    <div className="song-actions">
+                      <button type="button" onClick={() => handleOpenShow(show.id)}>
+                        Abrir / editar
+                      </button>
+                      <button
+                        className="secondary-button"
+                        type="button"
+                        onClick={() => handleOpenLiveView(show)}
+                        disabled={show.songIds.length === 0}
+                      >
+                        Modo Live
+                      </button>
+                    </div>
+                  </article>
+                ))
+              )}
+            </div>
+            {liveError && <p className="form-error">{liveError}</p>}
+          </section>
+
+          <section className="panel-section rehearsal-entry-panel">
+            <div className="section-header compact">
+              <div>
+                <span className="section-label">Ensayo</span>
+                <h2>Modo Ensayo</h2>
+                <p>Reproducí temas sueltos del proyecto sin crear un show.</p>
+              </div>
+              <button
+                type="button"
+                onClick={handleOpenRehearsalView}
+                disabled={rehearsalSongs.length === 0}
+              >
+                Modo Ensayo
+              </button>
+            </div>
+            {selectedProject.songs.length > rehearsalSongs.length && (
+              <p className="empty-state">
+                Hay temas marcados como cover ocultos del ensayo.
+              </p>
+            )}
+          </section>
+
           <section className="panel-section">
+            <div className="section-header compact">
+              <div>
+                <span className="section-label">Temas</span>
+                <h2>Temas</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setSongMode({ type: "create" });
+                  setSongForm(emptySongForm);
+                  setTrackError("");
+                  setIsSongEditorOpen((current) => !current);
+                }}
+              >
+                Crear tema
+              </button>
+            </div>
+
+            {isSongEditorOpen && (
             <form className="form-stack" onSubmit={handleSongSubmit}>
               <div className="section-header compact">
                 <div>
@@ -1386,13 +1537,14 @@ export default function App() {
                 {songMode.type === "edit" && (
                   <button
                     className="secondary-button"
-                    type="button"
-                    onClick={() => {
-                      setSongMode({ type: "create" });
-                      setSongForm(emptySongForm);
-                    }}
-                  >
-                    Cancelar
+                          type="button"
+                          onClick={() => {
+                            setSongMode({ type: "create" });
+                            setSongForm(emptySongForm);
+                            setIsSongEditorOpen(false);
+                          }}
+                        >
+                          Cancelar
                   </button>
                 )}
               </div>
@@ -1537,6 +1689,7 @@ export default function App() {
 
               <button type="submit">{songMode.type === "edit" ? "Guardar tema" : "Crear tema"}</button>
             </form>
+            )}
 
             <div className="song-list">
               {selectedProject.songs.length === 0 ? (
@@ -1569,43 +1722,15 @@ export default function App() {
             </div>
           </section>
 
-          <section className="panel-section">
-            <div className="section-header compact">
-              <div>
-                <span className="section-label">Shows creados</span>
-                <h2>Shows</h2>
-              </div>
+          <section className="danger-zone">
+            <div>
+              <span className="section-label">Zona peligrosa</span>
+              <h2>Borrar proyecto</h2>
+              <p>Esta acción elimina el proyecto, sus temas y sus shows de este dispositivo.</p>
             </div>
-            <div className="show-list">
-              {selectedProject.shows.length === 0 ? (
-                <p className="empty-state">Todavía no hay shows.</p>
-              ) : (
-                selectedProject.shows.map((show) => (
-                  <article className="show-card" key={show.id}>
-                    <div>
-                      <strong>{show.title}</strong>
-                      <span>
-                        {formatShowDate(show.date)} · {show.songIds.length} canciones
-                      </span>
-                    </div>
-                    <div className="song-actions">
-                      <button type="button" onClick={() => handleOpenShow(show.id)}>
-                        Abrir show
-                      </button>
-                      <button
-                        className="secondary-button"
-                        type="button"
-                        onClick={() => handleOpenLiveView(show)}
-                        disabled={show.songIds.length === 0}
-                      >
-                        Modo Live
-                      </button>
-                    </div>
-                  </article>
-                ))
-              )}
-            </div>
-            {liveError && <p className="form-error">{liveError}</p>}
+            <button className="danger-button" type="button" onClick={handleDeleteProject}>
+              Borrar proyecto
+            </button>
           </section>
         </div>
       </main>
@@ -1740,6 +1865,164 @@ export default function App() {
               )}
             </div>
           </div>
+        </section>
+      </main>
+    );
+  }
+
+  if (appScreen === "rehearsal" && selectedProject) {
+    return (
+      <main className="live-stage-shell rehearsal-shell" ref={liveStageRef}>
+        <header className="live-stage-header">
+          <div>
+            <span className="app-kicker">{selectedProject.name}</span>
+            <h1>Modo Ensayo</h1>
+            <p>{rehearsalSongs.length} temas disponibles</p>
+          </div>
+          <div className="live-header-actions">
+            <button className="secondary-button" type="button" onClick={() => void handleToggleFullscreen()}>
+              {isLiveFullscreen ? "Salir pantalla completa" : "Pantalla completa"}
+            </button>
+            <button className="secondary-button" type="button" onClick={() => void handleCloseLiveView()}>
+              Volver al proyecto
+            </button>
+          </div>
+        </header>
+
+        <section className="rehearsal-stage">
+          <aside className="rehearsal-song-list">
+            <span className="section-label">Temas del proyecto</span>
+            {rehearsalSongs.length === 0 ? (
+              <p className="empty-state">No hay temas disponibles para ensayo.</p>
+            ) : (
+              rehearsalSongs.map((song, index) => (
+                <button
+                  className={song.id === liveSong?.id ? "rehearsal-song-button active" : "rehearsal-song-button"}
+                  key={song.id}
+                  type="button"
+                  onClick={() => void handleSelectLiveSong(song.id)}
+                >
+                  <span>{index + 1}</span>
+                  <div>
+                    <strong>{song.title}</strong>
+                    <small>{formatBpm(song.bpm)} BPM · {describePlayback(song)}</small>
+                  </div>
+                </button>
+              ))
+            )}
+          </aside>
+
+          {liveSong ? (
+            <div className="stage-main rehearsal-player">
+              <div className="stage-topline">
+                <span className={`stage-state ${liveStageState.toLowerCase()}`}>{liveStageState}</span>
+                <span>
+                  Tema {liveSongIndex + 1} de {activePlaybackSongs.length}
+                </span>
+              </div>
+
+              <div className="live-meter">
+                <h2>{liveSong.title}</h2>
+                <strong>{formatBpm(liveSong.bpm)} BPM</strong>
+                <p>
+                  {liveSong.timeSignatureNumerator}/{liveSong.timeSignatureDenominator} · Count-in{" "}
+                  {liveSong.countInBars}
+                </p>
+              </div>
+
+              <div className="stage-indicators">
+                <button
+                  className={hasClickActive(liveSong) ? "indicator on" : "indicator off"}
+                  type="button"
+                  onClick={() => handleLiveToggle("clickEnabled")}
+                >
+                  CLICK {hasClickActive(liveSong) ? "ON" : "OFF"}
+                </button>
+                <button
+                  className={hasTrackActive(liveSong) ? "indicator on" : "indicator off"}
+                  type="button"
+                  onClick={() => handleLiveToggle("trackEnabled")}
+                  disabled={!liveSong.trackFileId}
+                >
+                  TRACK {hasTrackActive(liveSong) ? "ON" : "OFF"}
+                </button>
+                <span className="indicator route">
+                  {channelMode === "normal" ? "TRACK L / CLICK R" : "TRACK R / CLICK L"}
+                </span>
+              </div>
+
+              <div className="stage-progress">
+                <div>
+                  <strong>{formatDuration(liveDuration ? Math.min(liveElapsed, liveDuration) : liveElapsed)}</strong>
+                  <span>
+                    {liveDuration
+                      ? isLiveTrackEnded
+                        ? "Track finalizado"
+                        : `Pista ${formatDuration(liveDuration)}`
+                      : "Click libre"}
+                  </span>
+                </div>
+                {liveDuration ? (
+                  <input
+                    min={0}
+                    max={liveDuration}
+                    step={0.1}
+                    type="range"
+                    value={Math.min(liveElapsed, liveDuration)}
+                    onChange={(event) => handleSeekLiveSong(Number(event.target.value))}
+                  />
+                ) : (
+                  <div className="free-click-progress">Metrónomo sin duración final</div>
+                )}
+              </div>
+
+              <div className="stage-actions">
+                <button
+                  className="stage-button play"
+                  type="button"
+                  onClick={handlePlayPauseLiveSong}
+                  disabled={!isLivePlaying && !hasClickActive(liveSong) && !hasTrackActive(liveSong)}
+                >
+                  {isLivePlaying ? "PAUSE" : isLivePaused ? "RESUME" : "PLAY"}
+                </button>
+                <button
+                  className="stage-button stop"
+                  type="button"
+                  onClick={handleStopLiveSong}
+                  disabled={!isLivePlaying && !isLivePaused && liveElapsed === 0}
+                >
+                  STOP
+                </button>
+                <button
+                  className="stage-button previous"
+                  type="button"
+                  onClick={() => void handleMoveLiveSong(-1)}
+                  disabled={liveSongIndex <= 0}
+                >
+                  PREVIOUS
+                </button>
+                <button
+                  className="stage-button next"
+                  type="button"
+                  onClick={() => void handleMoveLiveSong(1)}
+                  disabled={liveSongIndex >= activePlaybackSongs.length - 1}
+                >
+                  NEXT
+                </button>
+              </div>
+
+              <div className="stage-message">
+                <strong>{describePlayback(liveSong)}</strong>
+                <span>{liveStatus}</span>
+                {liveError && <span className="form-error">{liveError}</span>}
+              </div>
+            </div>
+          ) : (
+            <section className="empty-panel">
+              <h2>Sin temas para ensayo</h2>
+              <p>Volvé al proyecto y cargá temas para poder ensayar.</p>
+            </section>
+          )}
         </section>
       </main>
     );

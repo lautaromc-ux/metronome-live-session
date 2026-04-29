@@ -351,6 +351,47 @@ label {
   margin-bottom: 0;
 }
 
+.project-header-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+
+.compact-button {
+  min-height: 42px;
+  padding: 0.7rem 0.95rem;
+}
+
+.project-detail-stack {
+  display: grid;
+  gap: 18px;
+}
+
+.project-edit-panel,
+.rehearsal-entry-panel,
+.danger-zone {
+  display: grid;
+  gap: 1rem;
+}
+
+.danger-zone {
+  align-items: center;
+  border: 1px solid #4a3735;
+  border-radius: 8px;
+  background: #211615;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 1rem;
+}
+
+.danger-zone h2,
+.danger-zone p {
+  margin: 0.35rem 0 0;
+}
+
+.danger-zone p {
+  color: #d9aaa6;
+}
+
 .management-grid {
   display: grid;
   grid-template-columns: minmax(320px, 1fr) minmax(320px, 1fr);
@@ -487,6 +528,57 @@ label {
 
 .live-stage-shell {
   width: min(1440px, calc(100% - 28px));
+}
+
+.rehearsal-stage {
+  display: grid;
+  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.rehearsal-song-list {
+  display: grid;
+  gap: 0.75rem;
+  border: 1px solid #2d3833;
+  border-radius: 8px;
+  background: #151b1d;
+  padding: 1rem;
+  position: sticky;
+  top: 16px;
+}
+
+.rehearsal-song-button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: center;
+  border: 1px solid #2d3833;
+  background: #20272a;
+  color: #f4f7f5;
+  min-height: 64px;
+  text-align: left;
+}
+
+.rehearsal-song-button.active {
+  border-color: #44b78b;
+  background: #20332d;
+}
+
+.rehearsal-song-button span {
+  color: #f2b84b;
+  font-weight: 900;
+}
+
+.rehearsal-song-button strong,
+.rehearsal-song-button small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.rehearsal-song-button small {
+  color: #94a59d;
+  margin-top: 0.25rem;
 }
 
 .live-stage-shell.stage-fullscreen,
@@ -902,11 +994,13 @@ label {
   .management-grid,
   .dashboard-grid,
   .project-screen-grid,
+  .rehearsal-stage,
   .stage-performance {
     grid-template-columns: 1fr;
   }
 
-  .stage-setlist {
+  .stage-setlist,
+  .rehearsal-song-list {
     position: static;
   }
 
@@ -953,9 +1047,14 @@ label {
   }
 
   .live-header-actions,
+  .project-header-actions,
   .stage-actions {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .danger-zone {
+    grid-template-columns: 1fr;
   }
 
   .stage-topline {
