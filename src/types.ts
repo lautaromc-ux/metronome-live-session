@@ -10,6 +10,7 @@ export type Song = {
   trackFileName: string;
   trackDuration: number;
   trackEnabled: boolean;
+  clickEnabled: boolean;
   trackVolume: number;
   clickVolume: number;
 };

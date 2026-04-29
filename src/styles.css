@@ -89,7 +89,8 @@ label {
 }
 
 .login-shell,
-.app-shell {
+.app-shell,
+.live-stage-shell {
   width: min(1180px, calc(100% - 32px));
   margin: 0 auto;
   padding: 28px 0 calc(28px + env(safe-area-inset-bottom));
@@ -124,6 +125,14 @@ label {
   margin-bottom: 24px;
 }
 
+.live-stage-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 18px;
+}
+
 .local-data-notice {
   display: grid;
   gap: 0.35rem;
@@ -140,16 +149,19 @@ label {
 }
 
 .app-header h1,
+.live-stage-header h1,
 .section-header h2,
 .empty-panel h2 {
   margin: 0;
 }
 
-.app-header h1 {
+.app-header h1,
+.live-stage-header h1 {
   font-size: clamp(2rem, 5vw, 3.4rem);
 }
 
 .app-header p,
+.live-stage-header p,
 .section-header p {
   margin: 0.4rem 0 0;
   color: #94a59d;
@@ -172,6 +184,60 @@ label {
   align-items: start;
 }
 
+.screen-shell {
+  display: grid;
+  gap: 1rem;
+}
+
+.dashboard-grid,
+.project-screen-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.8fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.project-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+}
+
+.project-card,
+.show-card {
+  display: grid;
+  gap: 0.45rem;
+  border: 1px solid #2d3833;
+  border-radius: 8px;
+  background: #181d20;
+  color: #f4f7f5;
+  padding: 1rem;
+  text-align: left;
+}
+
+.project-card:hover,
+.show-card:hover {
+  border-color: #44b78b;
+  background: #20332d;
+}
+
+.project-card strong,
+.show-card strong {
+  font-size: 1.25rem;
+  overflow-wrap: anywhere;
+}
+
+.project-card span,
+.project-card small,
+.show-card span {
+  color: #94a59d;
+}
+
+.show-editor-screen {
+  display: grid;
+  gap: 1rem;
+}
+
 .project-sidebar,
 .project-editor,
 .panel-section,
@@ -179,6 +245,7 @@ label {
 .setlist-panel,
 .setlist-item,
 .track-panel,
+.live-entry-panel,
 .live-panel,
 .backup-panel {
   border: 1px solid #2d3833;
@@ -348,6 +415,7 @@ label {
 }
 
 .track-panel,
+.live-entry-panel,
 .live-panel {
   display: grid;
   gap: 0.85rem;
@@ -355,6 +423,7 @@ label {
 }
 
 .track-panel p,
+.live-entry-panel p,
 .live-panel p {
   margin: 0.35rem 0 0;
   color: #94a59d;
@@ -365,6 +434,12 @@ label {
   display: flex;
   flex-wrap: wrap;
   gap: 0.6rem;
+}
+
+.live-toggle-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
 }
 
 .file-button {
@@ -397,6 +472,354 @@ label {
 
 .live-panel {
   background: #151b1d;
+}
+
+.live-stage {
+  display: grid;
+  gap: 1rem;
+}
+
+.live-stage-shell {
+  width: min(1440px, calc(100% - 28px));
+}
+
+.stage-performance {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  gap: 1rem;
+  align-items: start;
+}
+
+.stage-main {
+  display: grid;
+  gap: 1rem;
+}
+
+.stage-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  color: #c6d3cd;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.stage-state {
+  border-radius: 999px;
+  color: #07110d;
+  min-width: 118px;
+  padding: 0.45rem 0.8rem;
+  text-align: center;
+}
+
+.stage-state.ready {
+  background: #f2b84b;
+}
+
+.stage-state.playing {
+  background: #44b78b;
+}
+
+.stage-state.stopped {
+  background: #c9554d;
+}
+
+.live-stage-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.live-meter {
+  display: grid;
+  gap: 0.55rem;
+  border: 1px solid #385046;
+  border-radius: 8px;
+  background: #17221f;
+  padding: 22px;
+  text-align: center;
+}
+
+.stage-main .live-meter {
+  min-height: clamp(260px, 42vh, 520px);
+  align-content: center;
+  border-color: #45695b;
+  background: #121917;
+  padding: clamp(20px, 5vw, 48px);
+}
+
+.live-meter span {
+  color: #f2b84b;
+  font-size: 0.9rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.live-meter h2 {
+  margin: 0;
+  font-size: clamp(2.4rem, 9vw, 6.8rem);
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+
+.live-meter strong {
+  color: #91e3bd;
+  font-size: clamp(2.2rem, 7vw, 5rem);
+}
+
+.live-meter p {
+  margin: 0;
+  color: #c6d3cd;
+  font-weight: 800;
+}
+
+.stage-indicators {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.indicator {
+  border: 1px solid #2d3833;
+  border-radius: 8px;
+  background: #181d20;
+  color: #94a59d;
+  font-size: clamp(0.95rem, 2vw, 1.15rem);
+  font-weight: 900;
+  min-height: 56px;
+  padding: 0.9rem;
+  text-align: center;
+}
+
+.indicator.on {
+  border-color: #44b78b;
+  color: #91e3bd;
+}
+
+.indicator.off {
+  border-color: #4a3735;
+  color: #ff8b83;
+}
+
+.indicator.route {
+  color: #f2b84b;
+}
+
+.stage-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.stage-progress {
+  display: grid;
+  gap: 0.75rem;
+  border: 1px solid #2d3833;
+  border-radius: 8px;
+  background: #101517;
+  padding: 1rem;
+}
+
+.stage-progress div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  color: #94a59d;
+  font-weight: 900;
+}
+
+.stage-progress strong {
+  color: #f4f7f5;
+  font-size: 1.25rem;
+}
+
+.stage-progress input {
+  min-height: 36px;
+}
+
+.free-click-progress {
+  border: 1px dashed #3b4843;
+  border-radius: 8px;
+  padding: 0.85rem;
+  color: #94a59d;
+  font-weight: 900;
+  text-align: center;
+}
+
+.stage-button {
+  min-height: clamp(74px, 12vh, 128px);
+  font-size: clamp(1.1rem, 3vw, 2.4rem);
+  letter-spacing: 0;
+}
+
+.stage-button.play {
+  background: #44b78b;
+}
+
+.stage-button.stop {
+  background: #c9554d;
+  color: #170403;
+}
+
+.stage-button.previous,
+.stage-button.next {
+  background: #2a3336;
+  color: #f4f7f5;
+}
+
+.next-song-panel {
+  display: grid;
+  align-content: center;
+  gap: 0.6rem;
+  border: 1px solid #2d3833;
+  border-radius: 8px;
+  background: #181d20;
+  padding: 1rem;
+}
+
+.next-song-panel strong {
+  font-size: clamp(1.6rem, 4vw, 2.6rem);
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+.next-song-panel p {
+  margin: 0;
+  color: #94a59d;
+  font-weight: 800;
+}
+
+.stage-message {
+  display: grid;
+  gap: 0.3rem;
+  border: 1px solid #2d3833;
+  border-radius: 8px;
+  background: #101517;
+  padding: 1rem;
+  text-align: center;
+}
+
+.stage-message span {
+  color: #94a59d;
+}
+
+.stage-setlist {
+  display: grid;
+  gap: 0.8rem;
+  border: 1px solid #2d3833;
+  border-radius: 8px;
+  background: #151b1d;
+  padding: 1rem;
+  position: sticky;
+  top: 16px;
+}
+
+.stage-setlist .live-setlist-strip {
+  max-height: calc(100vh - 180px);
+  overflow: auto;
+  padding-right: 0.15rem;
+}
+
+.live-stage-status {
+  text-align: center;
+}
+
+.live-main-actions,
+.live-next-actions,
+.live-stage-controls {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.live-main-actions {
+  grid-template-columns: 2fr 1fr;
+}
+
+.live-main-actions button {
+  min-height: 78px;
+  font-size: 1.15rem;
+}
+
+.live-play-button {
+  min-height: 120px;
+  font-size: clamp(2.2rem, 8vw, 4.5rem);
+  letter-spacing: 0;
+}
+
+.live-play-button.stop {
+  background: #c9554d;
+  color: #170403;
+}
+
+.safe-actions button {
+  min-height: 64px;
+  font-size: 1.05rem;
+}
+
+.live-next-actions,
+.live-stage-controls {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.live-advanced-controls {
+  border: 1px solid #2d3833;
+  border-radius: 8px;
+  background: #151b1d;
+  padding: 1rem;
+}
+
+.live-advanced-controls summary {
+  cursor: pointer;
+  color: #c6d3cd;
+  font-weight: 900;
+}
+
+.live-advanced-controls[open] {
+  display: grid;
+  gap: 1rem;
+}
+
+.live-setlist-strip {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.live-song-chip {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.75rem;
+  align-items: center;
+  width: 100%;
+  border: 1px solid #2d3833;
+  border-radius: 8px;
+  background: #20272a;
+  color: #f4f7f5;
+  padding: 0.85rem 1rem;
+  text-align: left;
+}
+
+.live-song-chip.active {
+  border-color: #f2b84b;
+  background: #24281f;
+}
+
+.live-song-chip span {
+  display: inline-grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border-radius: 999px;
+  background: #111719;
+  color: #f2b84b;
+}
+
+.live-song-chip small {
+  display: block;
+  margin-top: 0.2rem;
+  color: #94a59d;
+  font-weight: 800;
 }
 
 .live-status {
@@ -455,19 +878,32 @@ label {
 
 @media (max-width: 1060px) {
   .workspace,
-  .management-grid {
+  .management-grid,
+  .dashboard-grid,
+  .project-screen-grid,
+  .stage-performance {
     grid-template-columns: 1fr;
+  }
+
+  .stage-setlist {
+    position: static;
+  }
+
+  .stage-setlist .live-setlist-strip {
+    max-height: none;
   }
 }
 
 @media (max-width: 700px) {
   .login-shell,
-  .app-shell {
+  .app-shell,
+  .live-stage-shell {
     width: min(100% - 20px, 1180px);
     padding: 18px 0 calc(18px + env(safe-area-inset-bottom));
   }
 
   .app-header,
+  .live-stage-header,
   .section-header,
   .song-card {
     align-items: stretch;
@@ -478,31 +914,56 @@ label {
   .project-editor,
   .panel-section,
   .song-card,
-  .setlist-panel,
-  .setlist-item,
-  .track-panel,
-  .live-panel,
+    .setlist-panel,
+    .setlist-item,
+    .track-panel,
+    .live-entry-panel,
+    .live-panel,
   .backup-panel,
   .login-card {
     padding: 14px;
   }
 
   .song-grid,
-  .add-song-form {
+  .add-song-form,
+  .live-stage-grid,
+  .stage-indicators,
+  .stage-actions {
     grid-template-columns: 1fr;
   }
 
-  .song-actions,
-  .setlist-actions,
-  .track-actions,
-  .live-actions {
-    flex-wrap: wrap;
+  .stage-topline {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .stage-state {
+    width: 100%;
+  }
+
+  .stage-button {
+    min-height: 76px;
   }
 
   .song-actions,
   .setlist-actions,
   .track-actions,
   .live-actions,
+  .live-toggle-grid,
+  .live-main-actions,
+  .live-next-actions,
+  .live-stage-controls {
+    flex-wrap: wrap;
+    grid-template-columns: 1fr;
+  }
+
+  .song-actions,
+  .setlist-actions,
+  .track-actions,
+  .live-actions,
+  .live-main-actions,
+  .live-next-actions,
+  .live-stage-controls,
   .file-button,
   button {
     width: 100%;

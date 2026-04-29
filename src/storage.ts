@@ -32,6 +32,7 @@ function normalizeSongs(value: unknown): Song[] {
       trackFileName: String(song.trackFileName ?? ""),
       trackDuration: Number(song.trackDuration ?? 0),
       trackEnabled: Boolean(song.trackEnabled ?? false),
+      clickEnabled: song.clickEnabled ?? true,
       trackVolume: Number(song.trackVolume ?? 1),
       clickVolume: Number(song.clickVolume ?? 1)
     };

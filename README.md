@@ -24,11 +24,13 @@ Ver [docs/AUDIO.md](docs/AUDIO.md).
 
 ### GitHub Pages
 
-1. Subir este proyecto a un repositorio de GitHub.
+El proyecto ya incluye deploy automático con GitHub Actions.
+
+1. Subir cambios a `main`.
 2. Ir a `Settings > Pages`.
 3. En `Build and deployment`, elegir `GitHub Actions`.
-4. Hacer push a `main`.
-5. GitHub publica automáticamente la carpeta `dist`.
+4. GitHub publica la app en:
+   `https://lautaromc-ux.github.io/metronome-live-session/`
 
 ### Vercel
 
