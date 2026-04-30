@@ -20,6 +20,8 @@ type AppScreen = "dashboard" | "project" | "show" | "live" | "rehearsal";
 
 const adminName = "Lautaro MC";
 const adminPassword = "metro2026";
+const defaultTrackVolume = 1;
+const defaultClickVolume = 0.4;
 
 const emptyProjectForm: ProjectForm = {
   name: "",
@@ -38,8 +40,8 @@ const emptySongForm: SongForm = {
   trackDuration: 0,
   trackEnabled: false,
   clickEnabled: true,
-  trackVolume: 1,
-  clickVolume: 1
+  trackVolume: defaultTrackVolume,
+  clickVolume: defaultClickVolume
 };
 
 const emptyShowForm: ShowForm = {
@@ -71,6 +73,14 @@ function clampBpm(value: number) {
   return Math.round(safeValue * 100) / 100;
 }
 
+function clampVolume(value: number | null | undefined, fallback: number) {
+  if (!Number.isFinite(value)) {
+    return fallback;
+  }
+
+  return Math.min(Math.max(Number(value), 0), 1);
+}
+
 function normalizeSongForm(form: SongForm): SongForm {
   const denominator = denominatorOptions.includes(form.timeSignatureDenominator)
     ? form.timeSignatureDenominator
@@ -88,8 +98,8 @@ function normalizeSongForm(form: SongForm): SongForm {
     trackDuration: form.trackDuration,
     trackEnabled: Boolean(form.trackEnabled && form.trackFileId),
     clickEnabled: form.clickEnabled,
-    trackVolume: Math.min(Math.max(form.trackVolume, 0), 1),
-    clickVolume: Math.min(Math.max(form.clickVolume, 0), 1)
+    trackVolume: clampVolume(form.trackVolume, defaultTrackVolume),
+    clickVolume: clampVolume(form.clickVolume, defaultClickVolume)
   };
 }
 
@@ -154,6 +164,25 @@ function hasTrackActive(song: Song) {
 
 function hasClickActive(song: Song) {
   return song.clickEnabled !== false;
+}
+
+function getTrackVolume(song: Song) {
+  return clampVolume(song.trackVolume, defaultTrackVolume);
+}
+
+function getClickVolume(song: Song) {
+  return clampVolume(song.clickVolume, defaultClickVolume);
+}
+
+function getActivePlaybackVolumes(song: Song) {
+  return {
+    trackVolume: hasTrackActive(song) ? getTrackVolume(song) : 0,
+    clickVolume: hasClickActive(song) ? getClickVolume(song) : 0
+  };
+}
+
+function formatVolumePercent(value: number) {
+  return `${Math.round(clampVolume(value, 0) * 100)}%`;
 }
 
 function describePlayback(song: Song) {
@@ -634,8 +663,8 @@ export default function App() {
       trackDuration: song.trackDuration,
       trackEnabled: song.trackEnabled,
       clickEnabled: song.clickEnabled,
-      trackVolume: song.trackVolume,
-      clickVolume: song.clickVolume
+      trackVolume: getTrackVolume(song),
+      clickVolume: getClickVolume(song)
     });
     setTrackError("");
   }
@@ -684,6 +713,11 @@ export default function App() {
       ...project,
       songs: project.songs.map((song) => (song.id === songId ? updater(song) : song))
     }));
+  }
+
+  function applyLiveSongVolumes(song: Song) {
+    const volumes = getActivePlaybackVolumes(song);
+    liveAudioRef.current?.setVolumes(volumes.trackVolume, volumes.clickVolume);
   }
 
   async function handleTrackFileChange(event: ChangeEvent<HTMLInputElement>) {
@@ -762,15 +796,19 @@ export default function App() {
     field: "trackVolume" | "clickVolume",
     value: number
   ) {
-    const nextValue = Math.min(Math.max(value, 0), 1);
+    const nextValue = clampVolume(
+      value,
+      field === "trackVolume" ? defaultTrackVolume : defaultClickVolume
+    );
+    const nextLiveSong = liveSong?.id === songId ? { ...liveSong, [field]: nextValue } : null;
 
     updateSong(songId, (song) => ({
       ...song,
       [field]: nextValue
     }));
 
-    if (liveSong?.id === songId) {
-      liveAudioRef.current?.setVolumes(hasTrackActive(liveSong) ? 1 : 0, hasClickActive(liveSong) ? 1 : 0);
+    if (nextLiveSong) {
+      applyLiveSongVolumes(nextLiveSong);
     }
   }
 
@@ -790,7 +828,7 @@ export default function App() {
         [field]: field === "trackEnabled" ? Boolean(value && liveSong.trackFileId) : value
       };
 
-      liveAudioRef.current?.setVolumes(hasTrackActive(nextSong) ? 1 : 0, hasClickActive(nextSong) ? 1 : 0);
+      applyLiveSongVolumes(nextSong);
     }
   }
 
@@ -1010,7 +1048,7 @@ export default function App() {
 
     setLiveError("");
     updateSong(liveSong.id, () => nextSong);
-    liveAudioRef.current?.setVolumes(hasTrackActive(nextSong) ? 1 : 0, hasClickActive(nextSong) ? 1 : 0);
+    applyLiveSongVolumes(nextSong);
 
     if (field === "trackEnabled" && hasTrackActive(nextSong) && liveAudioRef.current?.isTrackEnded()) {
       setLiveStatus("Track finalizado. Volvé al inicio o mové la línea de tiempo para escucharlo.");
@@ -1031,6 +1069,50 @@ export default function App() {
     const nextMode: AudioChannelMode = channelMode === "normal" ? "inverted" : "normal";
     setChannelMode(nextMode);
     liveAudioRef.current?.setChannelMode(nextMode);
+  }
+
+  function renderStageVolumeControls(song: Song) {
+    const clickVolume = getClickVolume(song);
+    const trackVolume = getTrackVolume(song);
+
+    return (
+      <div className="stage-volume-controls">
+        <label className="stage-volume-control">
+          <span>
+            CLICK VOL <strong>{formatVolumePercent(clickVolume)}</strong>
+          </span>
+          <input
+            aria-label="Volumen del click"
+            min={0}
+            max={1}
+            step={0.01}
+            type="range"
+            value={clickVolume}
+            onChange={(event) =>
+              handleSongVolumeChange(song.id, "clickVolume", Number(event.target.value))
+            }
+          />
+        </label>
+
+        <label className={song.trackFileId ? "stage-volume-control" : "stage-volume-control disabled"}>
+          <span>
+            TRACK VOL <strong>{formatVolumePercent(trackVolume)}</strong>
+          </span>
+          <input
+            aria-label="Volumen de la pista"
+            disabled={!song.trackFileId}
+            min={0}
+            max={1}
+            step={0.01}
+            type="range"
+            value={trackVolume}
+            onChange={(event) =>
+              handleSongVolumeChange(song.id, "trackVolume", Number(event.target.value))
+            }
+          />
+        </label>
+      </div>
+    );
   }
 
   async function handleToggleFullscreen() {
@@ -1951,6 +2033,8 @@ export default function App() {
                 </span>
               </div>
 
+              {renderStageVolumeControls(liveSong)}
+
               <div className="stage-progress">
                 <div>
                   <strong>{formatDuration(liveDuration ? Math.min(liveElapsed, liveDuration) : liveElapsed)}</strong>
@@ -2092,6 +2176,8 @@ export default function App() {
                     {channelMode === "normal" ? "TRACK L / CLICK R" : "TRACK R / CLICK L"}
                   </span>
                 </div>
+
+                {renderStageVolumeControls(liveSong)}
 
                 <div className="stage-progress">
                   <div>

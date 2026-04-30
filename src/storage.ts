@@ -3,6 +3,8 @@ import type { Project, Show, Song } from "./types";
 const STORAGE_KEY = "metronomo-live.projects.v1";
 const SESSION_KEY = "metronomo-live.admin-session.v1";
 const BACKUP_VERSION = 1;
+const DEFAULT_TRACK_VOLUME = 1;
+const DEFAULT_CLICK_VOLUME = 0.4;
 
 export type ProjectsBackup = {
   app: "metronomo-live";
@@ -11,6 +13,16 @@ export type ProjectsBackup = {
   audioFilesIncluded: false;
   projects: Project[];
 };
+
+function normalizeVolume(value: unknown, fallback: number) {
+  const volume = Number(value);
+
+  if (!Number.isFinite(volume)) {
+    return fallback;
+  }
+
+  return Math.min(Math.max(volume, 0), 1);
+}
 
 function normalizeSongs(value: unknown): Song[] {
   if (!Array.isArray(value)) {
@@ -33,8 +45,8 @@ function normalizeSongs(value: unknown): Song[] {
       trackDuration: Number(song.trackDuration ?? 0),
       trackEnabled: Boolean(song.trackEnabled ?? false),
       clickEnabled: song.clickEnabled ?? true,
-      trackVolume: Number(song.trackVolume ?? 1),
-      clickVolume: Number(song.clickVolume ?? 1)
+      trackVolume: normalizeVolume(song.trackVolume, DEFAULT_TRACK_VOLUME),
+      clickVolume: normalizeVolume(song.clickVolume, DEFAULT_CLICK_VOLUME)
     };
   });
 }

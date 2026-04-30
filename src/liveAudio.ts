@@ -27,6 +27,8 @@ const CLICK_DURATION_SECONDS = 0.05;
 const ACCENT_FREQUENCY = 1200;
 const NORMAL_FREQUENCY = 850;
 const CLICK_LOOP_BARS = 64;
+const DEFAULT_TRACK_VOLUME = 1;
+const DEFAULT_CLICK_VOLUME = 0.4;
 
 function getBeatInterval(bpm: number) {
   const safeBpm = Number.isFinite(bpm) && bpm > 0 ? bpm : 120;
@@ -35,6 +37,14 @@ function getBeatInterval(bpm: number) {
 
 function getBeatTime(startTime: number, beatIndex: number, beatInterval: number) {
   return startTime + beatIndex * beatInterval;
+}
+
+function clampVolume(value: number | null | undefined, fallback: number) {
+  if (!Number.isFinite(value)) {
+    return fallback;
+  }
+
+  return Math.min(Math.max(Number(value), 0), 1);
 }
 
 export function validateLongSongTiming(
@@ -98,6 +108,8 @@ export class LiveAudioEngine {
     const hasTrack = Boolean(decodedTrack && song.trackFileId);
     const clickStartsEnabled = song.clickEnabled !== false;
     const countInBeats = hasTrack && clickStartsEnabled ? song.countInBars * song.timeSignatureNumerator : 0;
+    const trackVolume = clampVolume(song.trackVolume, DEFAULT_TRACK_VOLUME);
+    const clickVolume = clampVolume(song.clickVolume, DEFAULT_CLICK_VOLUME);
 
     this.channelMode = channelMode;
     this.beatInterval = getBeatInterval(song.bpm);
@@ -115,8 +127,8 @@ export class LiveAudioEngine {
 
     this.trackGain = context.createGain();
     this.clickGain = context.createGain();
-    this.trackGain.gain.value = this.activeTrackBuffer && song.trackEnabled ? 1 : 0;
-    this.clickGain.gain.value = clickStartsEnabled ? 1 : 0;
+    this.trackGain.gain.value = this.activeTrackBuffer && song.trackEnabled ? trackVolume : 0;
+    this.clickGain.gain.value = clickStartsEnabled ? clickVolume : 0;
     this.connectOutput();
 
     if (!this.activeTrackBuffer && !clickStartsEnabled) {
@@ -215,8 +227,8 @@ export class LiveAudioEngine {
     }
 
     const now = this.context.currentTime;
-    this.trackGain?.gain.setTargetAtTime(trackVolume, now, 0.01);
-    this.clickGain?.gain.setTargetAtTime(clickVolume, now, 0.01);
+    this.trackGain?.gain.setTargetAtTime(clampVolume(trackVolume, DEFAULT_TRACK_VOLUME), now, 0.01);
+    this.clickGain?.gain.setTargetAtTime(clampVolume(clickVolume, DEFAULT_CLICK_VOLUME), now, 0.01);
   }
 
   setChannelMode(channelMode: AudioChannelMode) {

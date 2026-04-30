@@ -720,6 +720,43 @@ label {
   color: #f2b84b;
 }
 
+.stage-volume-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.stage-volume-control {
+  display: grid;
+  gap: 0.7rem;
+  border: 1px solid #2d3833;
+  border-radius: 8px;
+  background: #101517;
+  padding: 0.9rem;
+}
+
+.stage-volume-control span {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  color: #94a59d;
+  font-weight: 900;
+}
+
+.stage-volume-control strong {
+  color: #f4f7f5;
+}
+
+.stage-volume-control input {
+  width: 100%;
+  min-height: 38px;
+  accent-color: #44b78b;
+}
+
+.stage-volume-control.disabled {
+  opacity: 0.55;
+}
+
 .stage-actions {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1042,7 +1079,8 @@ label {
   .song-grid,
   .add-song-form,
   .live-stage-grid,
-  .stage-indicators {
+  .stage-indicators,
+  .stage-volume-controls {
     grid-template-columns: 1fr;
   }
 
