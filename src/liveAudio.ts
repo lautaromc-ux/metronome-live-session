@@ -24,8 +24,11 @@ export type TimingValidationResult = {
 
 const PLAYBACK_START_DELAY_SECONDS = 0.08;
 const CLICK_DURATION_SECONDS = 0.05;
+const CLICK_ATTACK_SECONDS = 0.001;
 const ACCENT_FREQUENCY = 1200;
 const NORMAL_FREQUENCY = 850;
+const ACCENT_CLICK_LEVEL = 0.28;
+const NORMAL_CLICK_LEVEL = 0.2;
 const CLICK_LOOP_BARS = 64;
 const DEFAULT_TRACK_VOLUME = 1;
 const DEFAULT_CLICK_VOLUME = 0.4;
@@ -415,9 +418,9 @@ export class LiveAudioEngine {
     isAccent: boolean
   ) {
     const frequency = isAccent ? ACCENT_FREQUENCY : NORMAL_FREQUENCY;
-    const amplitude = isAccent ? 0.9 : 0.65;
+    const amplitude = isAccent ? ACCENT_CLICK_LEVEL : NORMAL_CLICK_LEVEL;
     const durationFrames = Math.round(CLICK_DURATION_SECONDS * sampleRate);
-    const attackFrames = Math.max(1, Math.round(0.004 * sampleRate));
+    const attackFrames = Math.max(1, Math.round(CLICK_ATTACK_SECONDS * sampleRate));
 
     for (let frameOffset = 0; frameOffset < durationFrames; frameOffset += 1) {
       const frameIndex = startFrame + frameOffset;
