@@ -1,4 +1,4 @@
-import type { Project, Show, Song } from "./types";
+import type { Project, Show, Song, TriggerSound } from "./types";
 
 const STORAGE_KEY = "metronomo-live.projects.v1";
 const SESSION_KEY = "metronomo-live.admin-session.v1";
@@ -24,13 +24,47 @@ function normalizeVolume(value: unknown, fallback: number) {
   return Math.min(Math.max(volume, 0), 1);
 }
 
+function normalizeTriggerSounds(value: unknown): TriggerSound[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.map((item) => {
+    const sound = item as Partial<TriggerSound>;
+
+    return {
+      id: String(sound.id ?? ""),
+      fileName: String(sound.fileName ?? ""),
+      duration: Number(sound.duration ?? 0),
+      volume: normalizeVolume(sound.volume, DEFAULT_TRACK_VOLUME)
+    };
+  }).filter((sound) => Boolean(sound.id && sound.fileName));
+}
+
 function normalizeSongs(value: unknown): Song[] {
   if (!Array.isArray(value)) {
     return [];
   }
 
   return value.map((item) => {
-    const song = item as Partial<Song>;
+    const song = item as Partial<Song> & {
+      controlledTrackFileId?: string;
+      controlledTrackFileName?: string;
+      controlledTrackDuration?: number;
+      controlledTrackVolume?: number;
+    };
+    const triggerSounds = normalizeTriggerSounds(song.triggerSounds);
+    const legacyControlledSound =
+      triggerSounds.length === 0 && song.controlledTrackFileId && song.controlledTrackFileName
+        ? [
+            {
+              id: String(song.controlledTrackFileId),
+              fileName: String(song.controlledTrackFileName),
+              duration: Number(song.controlledTrackDuration ?? 0),
+              volume: normalizeVolume(song.controlledTrackVolume, DEFAULT_TRACK_VOLUME)
+            }
+          ]
+        : triggerSounds;
 
     return {
       id: String(song.id ?? ""),
@@ -44,6 +78,7 @@ function normalizeSongs(value: unknown): Song[] {
       trackFileName: String(song.trackFileName ?? ""),
       trackDuration: Number(song.trackDuration ?? 0),
       trackEnabled: Boolean(song.trackEnabled ?? false),
+      triggerSounds: legacyControlledSound,
       clickEnabled: song.clickEnabled ?? true,
       trackVolume: normalizeVolume(song.trackVolume, DEFAULT_TRACK_VOLUME),
       clickVolume: normalizeVolume(song.clickVolume, DEFAULT_CLICK_VOLUME)
@@ -123,7 +158,8 @@ export function createProjectsBackup(projects: Project[]): ProjectsBackup {
         trackFileId: "",
         trackFileName: "",
         trackDuration: 0,
-        trackEnabled: false
+        trackEnabled: false,
+        triggerSounds: []
       }))
     }))
   };

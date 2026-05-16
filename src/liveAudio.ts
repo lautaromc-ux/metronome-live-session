@@ -9,6 +9,13 @@ type StartOptions = {
   offsetSeconds?: number;
 };
 
+type ControlledStartOptions = {
+  file: File;
+  channelMode: AudioChannelMode;
+  volume?: number;
+  offsetSeconds?: number;
+};
+
 type TimingValidationOptions = {
   bpm: number;
   durationSeconds: number;
@@ -48,6 +55,21 @@ function clampVolume(value: number | null | undefined, fallback: number) {
   }
 
   return Math.min(Math.max(Number(value), 0), 1);
+}
+
+function createMonoAudioBuffer(context: AudioContext, trackBuffer: AudioBuffer) {
+  const output = context.createBuffer(1, trackBuffer.length, trackBuffer.sampleRate);
+  const outputChannel = output.getChannelData(0);
+
+  for (let channelIndex = 0; channelIndex < trackBuffer.numberOfChannels; channelIndex += 1) {
+    const inputChannel = trackBuffer.getChannelData(channelIndex);
+
+    for (let frameIndex = 0; frameIndex < trackBuffer.length; frameIndex += 1) {
+      outputChannel[frameIndex] += inputChannel[frameIndex] / trackBuffer.numberOfChannels;
+    }
+  }
+
+  return output;
 }
 
 export function validateLongSongTiming(
@@ -376,18 +398,7 @@ export class LiveAudioEngine {
   }
 
   private createMonoTrackBuffer(context: AudioContext, trackBuffer: AudioBuffer) {
-    const output = context.createBuffer(1, trackBuffer.length, trackBuffer.sampleRate);
-    const outputChannel = output.getChannelData(0);
-
-    for (let channelIndex = 0; channelIndex < trackBuffer.numberOfChannels; channelIndex += 1) {
-      const inputChannel = trackBuffer.getChannelData(channelIndex);
-
-      for (let frameIndex = 0; frameIndex < trackBuffer.length; frameIndex += 1) {
-        outputChannel[frameIndex] += inputChannel[frameIndex] / trackBuffer.numberOfChannels;
-      }
-    }
-
-    return output;
+    return createMonoAudioBuffer(context, trackBuffer);
   }
 
   private createClickLoopBuffer(context: AudioContext, timeSignatureNumerator: number) {
@@ -458,6 +469,205 @@ export class LiveAudioEngine {
     try {
       this.trackGain?.disconnect();
       this.clickGain?.disconnect();
+      this.merger?.disconnect();
+    } catch {
+      // Disconnect can throw when nodes are already disconnected.
+    }
+
+    this.merger = null;
+  }
+}
+
+export class ControlledAudioPlayer {
+  private context: AudioContext | null = null;
+  private channelMode: AudioChannelMode = "normal";
+  private gain: GainNode | null = null;
+  private merger: ChannelMergerNode | null = null;
+  private source: AudioBufferSourceNode | null = null;
+  private activeBuffer: AudioBuffer | null = null;
+  private playbackOffsetSeconds = 0;
+  private sourceStartTime = 0;
+  private isPlaying = false;
+  private ended = false;
+  private playbackToken = 0;
+
+  async start({
+    file,
+    channelMode,
+    volume = DEFAULT_TRACK_VOLUME,
+    offsetSeconds = 0
+  }: ControlledStartOptions) {
+    await this.stop();
+
+    const context = await this.ensureContext();
+    const decodedTrack = await this.decodeTrack(file);
+    const activeBuffer = createMonoAudioBuffer(context, decodedTrack);
+
+    this.activeBuffer = activeBuffer;
+    this.channelMode = channelMode;
+    this.playbackOffsetSeconds = Math.max(0, Math.min(offsetSeconds, activeBuffer.duration));
+    this.gain = context.createGain();
+    this.gain.gain.value = clampVolume(volume, DEFAULT_TRACK_VOLUME);
+    this.connectOutput();
+    this.startSource(context);
+  }
+
+  pause() {
+    if (!this.isPlaying) {
+      return this.playbackOffsetSeconds;
+    }
+
+    this.playbackOffsetSeconds = this.getPosition();
+    this.playbackToken += 1;
+    this.isPlaying = false;
+    this.stopSource();
+    this.disconnectOutput();
+
+    return this.playbackOffsetSeconds;
+  }
+
+  resume() {
+    if (!this.context || !this.activeBuffer || this.isPlaying) {
+      return;
+    }
+
+    if (this.playbackOffsetSeconds >= this.activeBuffer.duration) {
+      this.playbackOffsetSeconds = 0;
+    }
+
+    this.connectOutput();
+    this.startSource(this.context);
+  }
+
+  async stop() {
+    this.playbackToken += 1;
+    this.isPlaying = false;
+    this.playbackOffsetSeconds = 0;
+    this.ended = false;
+    this.stopSource();
+    this.activeBuffer = null;
+    this.disconnectOutput();
+    this.gain = null;
+  }
+
+  getPosition() {
+    if (!this.context || !this.isPlaying) {
+      return this.playbackOffsetSeconds;
+    }
+
+    const position =
+      this.playbackOffsetSeconds + Math.max(0, this.context.currentTime - this.sourceStartTime);
+    const duration = this.getDuration();
+
+    return duration ? Math.min(position, duration) : position;
+  }
+
+  getDuration() {
+    return this.activeBuffer?.duration ?? 0;
+  }
+
+  isEnded() {
+    return this.ended;
+  }
+
+  setVolume(volume: number) {
+    if (!this.context || !this.gain) {
+      return;
+    }
+
+    this.gain.gain.setTargetAtTime(
+      clampVolume(volume, DEFAULT_TRACK_VOLUME),
+      this.context.currentTime,
+      0.01
+    );
+  }
+
+  setChannelMode(channelMode: AudioChannelMode) {
+    this.channelMode = channelMode;
+    this.connectOutput();
+  }
+
+  private startSource(context: AudioContext) {
+    if (!this.activeBuffer || !this.gain) {
+      return;
+    }
+
+    if (this.playbackOffsetSeconds >= this.activeBuffer.duration) {
+      this.playbackOffsetSeconds = this.activeBuffer.duration;
+      this.isPlaying = false;
+      this.ended = true;
+      return;
+    }
+
+    const token = this.playbackToken + 1;
+    const source = context.createBufferSource();
+
+    this.playbackToken = token;
+    this.sourceStartTime = context.currentTime + PLAYBACK_START_DELAY_SECONDS;
+    this.isPlaying = true;
+    this.ended = false;
+    source.buffer = this.activeBuffer;
+    source.connect(this.gain);
+    source.start(this.sourceStartTime, this.playbackOffsetSeconds);
+    source.onended = () => {
+      if (token === this.playbackToken) {
+        this.source = null;
+        this.isPlaying = false;
+        this.playbackOffsetSeconds = this.activeBuffer?.duration ?? this.playbackOffsetSeconds;
+        this.ended = true;
+      }
+    };
+
+    this.source = source;
+  }
+
+  private stopSource() {
+    if (this.source) {
+      try {
+        this.source.stop();
+      } catch {
+        // Source may already be stopped.
+      }
+    }
+
+    this.source = null;
+  }
+
+  private async ensureContext() {
+    if (!this.context || this.context.state === "closed") {
+      this.context = new AudioContext();
+    }
+
+    if (this.context.state === "suspended") {
+      await this.context.resume();
+    }
+
+    return this.context;
+  }
+
+  private async decodeTrack(file: File) {
+    const context = await this.ensureContext();
+    const arrayBuffer = await file.arrayBuffer();
+    return context.decodeAudioData(arrayBuffer.slice(0));
+  }
+
+  private connectOutput() {
+    if (!this.context || !this.gain) {
+      return;
+    }
+
+    this.disconnectOutput();
+
+    this.merger = this.context.createChannelMerger(2);
+    const trackChannel = this.channelMode === "normal" ? 0 : 1;
+
+    this.gain.connect(this.merger, 0, trackChannel);
+    this.merger.connect(this.context.destination);
+  }
+
+  private disconnectOutput() {
+    try {
+      this.gain?.disconnect();
       this.merger?.disconnect();
     } catch {
       // Disconnect can throw when nodes are already disconnected.

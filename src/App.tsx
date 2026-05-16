@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
-import { deleteTrackFile, getTrackFile, saveTrackFile } from "./audioStorage";
-import { LiveAudioEngine, type AudioChannelMode } from "./liveAudio";
+import {
+  deleteTrackFile,
+  getTrackFile,
+  deleteTriggerSoundFile,
+  getTriggerSoundFile,
+  saveTriggerSoundFile,
+  saveTrackFile
+} from "./audioStorage";
+import { ControlledAudioPlayer, LiveAudioEngine, type AudioChannelMode } from "./liveAudio";
 import {
   createProjectsBackup,
   loadAdminSession,
@@ -9,7 +16,7 @@ import {
   saveAdminSession,
   saveProjects
 } from "./storage";
-import type { Project, Show, Song } from "./types";
+import type { Project, Show, Song, TriggerSound } from "./types";
 
 type ProjectForm = Pick<Project, "name" | "description">;
 type SongForm = Omit<Song, "id">;
@@ -17,6 +24,14 @@ type ShowForm = Pick<Show, "title" | "date" | "notes">;
 type SongMode = { type: "create" } | { type: "edit"; songId: string };
 type ShowMode = { type: "create" } | { type: "edit"; showId: string };
 type AppScreen = "dashboard" | "project" | "show" | "live" | "rehearsal";
+type TriggerSoundPlaybackState = {
+  isPlaying: boolean;
+  isPaused: boolean;
+  elapsed: number;
+  duration: number;
+  status: string;
+  error: string;
+};
 
 const adminName = "Lautaro MC";
 const adminPassword = "metro2026";
@@ -39,6 +54,7 @@ const emptySongForm: SongForm = {
   trackFileName: "",
   trackDuration: 0,
   trackEnabled: false,
+  triggerSounds: [],
   clickEnabled: true,
   trackVolume: defaultTrackVolume,
   clickVolume: defaultClickVolume
@@ -97,6 +113,12 @@ function normalizeSongForm(form: SongForm): SongForm {
     trackFileName: form.trackFileName,
     trackDuration: form.trackDuration,
     trackEnabled: Boolean(form.trackEnabled && form.trackFileId),
+    triggerSounds: form.triggerSounds.map((sound) => ({
+      id: sound.id,
+      fileName: sound.fileName,
+      duration: sound.duration,
+      volume: clampVolume(sound.volume, defaultTrackVolume)
+    })),
     clickEnabled: form.clickEnabled,
     trackVolume: clampVolume(form.trackVolume, defaultTrackVolume),
     clickVolume: clampVolume(form.clickVolume, defaultClickVolume)
@@ -162,12 +184,20 @@ function hasTrackActive(song: Song) {
   return Boolean(song.trackEnabled && song.trackFileId);
 }
 
+function hasTriggerSounds(song: Song) {
+  return song.triggerSounds.length > 0;
+}
+
 function hasClickActive(song: Song) {
   return song.clickEnabled !== false;
 }
 
 function getTrackVolume(song: Song) {
   return clampVolume(song.trackVolume, defaultTrackVolume);
+}
+
+function getTriggerSoundVolume(sound: TriggerSound) {
+  return clampVolume(sound.volume, defaultTrackVolume);
 }
 
 function getClickVolume(song: Song) {
@@ -202,6 +232,32 @@ function describePlayback(song: Song) {
   }
 
   return "Audio apagado";
+}
+
+function describeTriggerSounds(song: Song) {
+  if (song.triggerSounds.length === 0) {
+    return "";
+  }
+
+  return ` · ${song.triggerSounds.length} disparable${song.triggerSounds.length === 1 ? "" : "s"}`;
+}
+
+function createTriggerSoundPlaybackState(sound?: TriggerSound): TriggerSoundPlaybackState {
+  return {
+    isPlaying: false,
+    isPaused: false,
+    elapsed: 0,
+    duration: sound?.duration ?? 0,
+    status: "Sonido listo.",
+    error: ""
+  };
+}
+
+function createTriggerSoundPlaybackStates(sounds: TriggerSound[]) {
+  return sounds.reduce<Record<string, TriggerSoundPlaybackState>>((states, sound) => {
+    states[sound.id] = createTriggerSoundPlaybackState(sound);
+    return states;
+  }, {});
 }
 
 function isCoverSong(song: Song) {
@@ -250,6 +306,7 @@ export default function App() {
   const [isShowCreatorOpen, setIsShowCreatorOpen] = useState(false);
   const [songToAddId, setSongToAddId] = useState("");
   const [trackError, setTrackError] = useState("");
+  const [triggerSoundError, setTriggerSoundError] = useState("");
   const [liveSongId, setLiveSongId] = useState("");
   const [liveViewShowId, setLiveViewShowId] = useState<string | null>(null);
   const [channelMode, setChannelMode] = useState<AudioChannelMode>("normal");
@@ -258,12 +315,16 @@ export default function App() {
   const [liveElapsed, setLiveElapsed] = useState(0);
   const [liveDuration, setLiveDuration] = useState(0);
   const [isLiveTrackEnded, setIsLiveTrackEnded] = useState(false);
+  const [triggerSoundStates, setTriggerSoundStates] = useState<
+    Record<string, TriggerSoundPlaybackState>
+  >({});
   const [isLiveFullscreen, setIsLiveFullscreen] = useState(false);
   const [liveStatus, setLiveStatus] = useState("Listo para probar salida.");
   const [liveError, setLiveError] = useState("");
   const [backupStatus, setBackupStatus] = useState("");
   const [backupError, setBackupError] = useState("");
   const liveAudioRef = useRef<LiveAudioEngine | null>(null);
+  const triggerAudioRefs = useRef<Record<string, ControlledAudioPlayer>>({});
   const liveStageRef = useRef<HTMLElement | null>(null);
 
   const selectedProject = useMemo(() => {
@@ -350,6 +411,7 @@ export default function App() {
     setSongMode({ type: "create" });
     setSongForm(emptySongForm);
     setTrackError("");
+    setTriggerSoundError("");
     setLiveViewShowId((currentShowId) =>
       currentShowId && selectedProject.shows.some((show) => show.id === currentShowId)
         ? currentShowId
@@ -378,6 +440,7 @@ export default function App() {
 
     return () => {
       void liveAudioRef.current?.stop();
+      void stopAllTriggerSounds();
     };
   }, []);
 
@@ -392,11 +455,13 @@ export default function App() {
 
   useEffect(() => {
     void liveAudioRef.current?.stop();
+    void stopAllTriggerSounds();
     setIsLivePlaying(false);
     setIsLivePaused(false);
     setLiveElapsed(0);
     setLiveDuration(liveSong ? getSongTimelineDuration(liveSong) : 0);
     setIsLiveTrackEnded(false);
+    setTriggerSoundStates(createTriggerSoundPlaybackStates(liveSong?.triggerSounds ?? []));
     setLiveStatus("Listo para probar salida.");
     setLiveError("");
   }, [liveSong?.id]);
@@ -415,6 +480,30 @@ export default function App() {
       setLiveElapsed(trackDuration ? engine?.getTrackPosition() ?? 0 : engine?.getPosition() ?? 0);
       setLiveDuration(trackDuration);
       setIsLiveTrackEnded(trackEnded);
+      setTriggerSoundStates((currentStates) => {
+        const nextStates = { ...currentStates };
+
+        liveSong.triggerSounds.forEach((sound) => {
+          const player = triggerAudioRefs.current[sound.id];
+          const currentState = nextStates[sound.id] ?? createTriggerSoundPlaybackState(sound);
+          const duration = player?.getDuration() || sound.duration || currentState.duration;
+          const ended = Boolean(player?.isEnded());
+
+          nextStates[sound.id] = {
+            ...currentState,
+            isPlaying: ended ? false : currentState.isPlaying,
+            isPaused: ended ? false : currentState.isPaused,
+            elapsed: duration ? player?.getPosition() ?? currentState.elapsed : currentState.elapsed,
+            duration,
+            status:
+              ended && (currentState.isPlaying || currentState.isPaused)
+                ? "Sonido finalizado."
+                : currentState.status
+          };
+        });
+
+        return nextStates;
+      });
 
       if (trackEnded && isLivePlaying) {
         setLiveStatus((currentStatus) =>
@@ -425,6 +514,7 @@ export default function App() {
               : "Track finalizado."
         );
       }
+
     }, 200);
 
     return () => window.clearInterval(timer);
@@ -441,6 +531,33 @@ export default function App() {
           : project
       )
     );
+  }
+
+  function getTriggerSoundState(sound: TriggerSound) {
+    return triggerSoundStates[sound.id] ?? createTriggerSoundPlaybackState(sound);
+  }
+
+  function updateTriggerSoundState(
+    soundId: string,
+    updater: (state: TriggerSoundPlaybackState) => TriggerSoundPlaybackState
+  ) {
+    setTriggerSoundStates((currentStates) => ({
+      ...currentStates,
+      [soundId]: updater(currentStates[soundId] ?? createTriggerSoundPlaybackState())
+    }));
+  }
+
+  function getTriggerAudioPlayer(soundId: string) {
+    if (!triggerAudioRefs.current[soundId]) {
+      triggerAudioRefs.current[soundId] = new ControlledAudioPlayer();
+    }
+
+    return triggerAudioRefs.current[soundId];
+  }
+
+  async function stopAllTriggerSounds() {
+    await Promise.all(Object.values(triggerAudioRefs.current).map((player) => player.stop()));
+    triggerAudioRefs.current = {};
   }
 
   function handleLogin(event: FormEvent<HTMLFormElement>) {
@@ -471,11 +588,14 @@ export default function App() {
     setIsSongEditorOpen(false);
     setSongMode({ type: "create" });
     setSongForm(emptySongForm);
+    setTrackError("");
+    setTriggerSoundError("");
     setAppScreen("project");
   }
 
   async function handleBackToDashboard() {
     await liveAudioRef.current?.stop();
+    await stopAllTriggerSounds();
     setIsLivePlaying(false);
     setIsLivePaused(false);
     setAppScreen("dashboard");
@@ -483,6 +603,7 @@ export default function App() {
 
   async function handleBackToProject() {
     await liveAudioRef.current?.stop();
+    await stopAllTriggerSounds();
     setIsLivePlaying(false);
     setIsLivePaused(false);
     setAppScreen("project");
@@ -662,11 +783,13 @@ export default function App() {
       trackFileName: song.trackFileName,
       trackDuration: song.trackDuration,
       trackEnabled: song.trackEnabled,
+      triggerSounds: song.triggerSounds,
       clickEnabled: song.clickEnabled,
       trackVolume: getTrackVolume(song),
       clickVolume: getClickVolume(song)
     });
     setTrackError("");
+    setTriggerSoundError("");
   }
 
   async function handleDeleteSong(songId: string) {
@@ -683,6 +806,7 @@ export default function App() {
 
     try {
       await deleteTrackFile(songId);
+      await Promise.all((song?.triggerSounds ?? []).map((sound) => deleteTriggerSoundFile(sound.id)));
     } catch {
       // Metadata removal must still work if IndexedDB cleanup fails.
     }
@@ -791,6 +915,92 @@ export default function App() {
     }
   }
 
+  async function handleTriggerSoundFileChange(
+    event: ChangeEvent<HTMLInputElement>,
+    triggerSoundId?: string
+  ) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file || songMode.type !== "edit") {
+      return;
+    }
+
+    if (!isAllowedAudioFile(file)) {
+      setTriggerSoundError("Formato no permitido. Usá mp3, wav, m4a o aac.");
+      return;
+    }
+
+    try {
+      setTriggerSoundError("");
+      const duration = await getAudioDuration(file);
+      const soundId = triggerSoundId ?? createId();
+      await saveTriggerSoundFile(soundId, file);
+
+      setSongForm((current) => {
+        const existingSound = current.triggerSounds.find((sound) => sound.id === soundId);
+        const nextSound: TriggerSound = {
+          id: soundId,
+          fileName: file.name,
+          duration,
+          volume: existingSound?.volume ?? defaultTrackVolume
+        };
+
+        return {
+          ...current,
+          triggerSounds: existingSound
+            ? current.triggerSounds.map((sound) => (sound.id === soundId ? nextSound : sound))
+            : [...current.triggerSounds, nextSound]
+        };
+      });
+      updateSong(songMode.songId, (song) => {
+        const existingSound = song.triggerSounds.find((sound) => sound.id === soundId);
+        const nextSound: TriggerSound = {
+          id: soundId,
+          fileName: file.name,
+          duration,
+          volume: existingSound?.volume ?? defaultTrackVolume
+        };
+
+        return {
+          ...song,
+          triggerSounds: existingSound
+            ? song.triggerSounds.map((sound) => (sound.id === soundId ? nextSound : sound))
+            : [...song.triggerSounds, nextSound]
+        };
+      });
+    } catch {
+      setTriggerSoundError("No se pudo cargar ese sonido disparable.");
+    }
+  }
+
+  async function handleDeleteTriggerSound(triggerSound: TriggerSound) {
+    if (songMode.type !== "edit") {
+      return;
+    }
+
+    const confirmed = window.confirm(`Eliminar el sonido disparable "${triggerSound.fileName}"?`);
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await deleteTriggerSoundFile(triggerSound.id);
+      setSongForm((current) => ({
+        ...current,
+        triggerSounds: current.triggerSounds.filter((sound) => sound.id !== triggerSound.id)
+      }));
+      updateSong(songMode.songId, (song) => ({
+        ...song,
+        triggerSounds: song.triggerSounds.filter((sound) => sound.id !== triggerSound.id)
+      }));
+      setTriggerSoundError("");
+    } catch {
+      setTriggerSoundError("No se pudo eliminar ese sonido disparable.");
+    }
+  }
+
   function handleSongVolumeChange(
     songId: string,
     field: "trackVolume" | "clickVolume",
@@ -809,6 +1019,21 @@ export default function App() {
 
     if (nextLiveSong) {
       applyLiveSongVolumes(nextLiveSong);
+    }
+  }
+
+  function handleTriggerSoundVolumeChange(songId: string, triggerSoundId: string, value: number) {
+    const nextValue = clampVolume(value, defaultTrackVolume);
+
+    updateSong(songId, (song) => ({
+      ...song,
+      triggerSounds: song.triggerSounds.map((sound) =>
+        sound.id === triggerSoundId ? { ...sound, volume: nextValue } : sound
+      )
+    }));
+
+    if (liveSong?.id === songId) {
+      triggerAudioRefs.current[triggerSoundId]?.setVolume(nextValue);
     }
   }
 
@@ -846,6 +1071,10 @@ export default function App() {
       setLiveSongId(firstSongId);
     }
 
+    const firstSong = selectedProject?.songs.find((song) => song.id === firstSongId);
+
+    setTriggerSoundError("");
+    setTriggerSoundStates(createTriggerSoundPlaybackStates(firstSong?.triggerSounds ?? []));
     setAppScreen("live");
   }
 
@@ -866,11 +1095,14 @@ export default function App() {
     setIsLiveTrackEnded(false);
     setLiveStatus("Listo para ensayar.");
     setLiveError("");
+    setTriggerSoundError("");
+    setTriggerSoundStates(createTriggerSoundPlaybackStates(rehearsalSongs[0]?.triggerSounds ?? []));
     setAppScreen("rehearsal");
   }
 
   async function handleCloseLiveView() {
     await liveAudioRef.current?.stop();
+    await stopAllTriggerSounds();
     setIsLivePlaying(false);
     setIsLivePaused(false);
     setIsLiveTrackEnded(false);
@@ -880,12 +1112,14 @@ export default function App() {
 
   async function handleSelectLiveSong(songId: string) {
     await liveAudioRef.current?.stop();
+    await stopAllTriggerSounds();
     setIsLivePlaying(false);
     setIsLivePaused(false);
     setLiveSongId(songId);
     setLiveElapsed(0);
     setIsLiveTrackEnded(false);
     setLiveStatus("Listo para probar salida.");
+    setTriggerSoundError("");
     setLiveError("");
   }
 
@@ -1014,6 +1248,111 @@ export default function App() {
     void handleStartLiveSong();
   }
 
+  async function handleStartTriggerSound(sound: TriggerSound) {
+    if (!liveSong) {
+      return;
+    }
+
+    updateTriggerSoundState(sound.id, (state) => ({
+      ...state,
+      error: "",
+      status: "Preparando sonido..."
+    }));
+
+    try {
+      const triggerFile = await getTriggerSoundFile(sound.id);
+
+      if (!triggerFile) {
+        updateTriggerSoundState(sound.id, (state) => ({
+          ...state,
+          error: "No se encontró el audio guardado.",
+          status: "Sonido no disponible."
+        }));
+        return;
+      }
+
+      const player = getTriggerAudioPlayer(sound.id);
+      const currentState = getTriggerSoundState(sound);
+      const duration = sound.duration;
+      const startOffset =
+        currentState.elapsed > 0 && currentState.elapsed < duration ? currentState.elapsed : 0;
+
+      await player.start({
+        file: triggerFile,
+        channelMode,
+        volume: getTriggerSoundVolume(sound),
+        offsetSeconds: startOffset
+      });
+      updateTriggerSoundState(sound.id, (state) => ({
+        ...state,
+        isPlaying: true,
+        isPaused: false,
+        duration,
+        error: "",
+        status: "Sonido en reproducción."
+      }));
+    } catch {
+      updateTriggerSoundState(sound.id, (state) => ({
+        ...state,
+        isPlaying: false,
+        isPaused: false,
+        error: "No se pudo iniciar este sonido.",
+        status: "Revisá el archivo de audio."
+      }));
+    }
+  }
+
+  function handlePauseTriggerSound(sound: TriggerSound) {
+    const state = getTriggerSoundState(sound);
+    const position = triggerAudioRefs.current[sound.id]?.pause() ?? state.elapsed;
+
+    updateTriggerSoundState(sound.id, (currentState) => ({
+      ...currentState,
+      isPlaying: false,
+      isPaused: true,
+      elapsed: position,
+      status: "Sonido pausado."
+    }));
+  }
+
+  function handleResumeTriggerSound(sound: TriggerSound) {
+    triggerAudioRefs.current[sound.id]?.resume();
+    updateTriggerSoundState(sound.id, (state) => ({
+      ...state,
+      isPlaying: true,
+      isPaused: false,
+      status: "Sonido en reproducción."
+    }));
+  }
+
+  async function handleStopTriggerSound(sound: TriggerSound) {
+    await triggerAudioRefs.current[sound.id]?.stop();
+    updateTriggerSoundState(sound.id, (state) => ({
+      ...state,
+      isPlaying: false,
+      isPaused: false,
+      elapsed: 0,
+      duration: sound.duration,
+      status: "Sonido detenido."
+    }));
+  }
+
+  function handlePlayPauseTriggerSound(sound: TriggerSound) {
+    const state = getTriggerSoundState(sound);
+
+    if (state.isPlaying) {
+      handlePauseTriggerSound(sound);
+      return;
+    }
+
+    if (state.isPaused) {
+      handleResumeTriggerSound(sound);
+      return;
+    }
+
+    void handleStartTriggerSound(sound);
+  }
+
   function handleSeekLiveSong(position: number) {
     if (!liveDuration) {
       return;
@@ -1069,6 +1408,7 @@ export default function App() {
     const nextMode: AudioChannelMode = channelMode === "normal" ? "inverted" : "normal";
     setChannelMode(nextMode);
     liveAudioRef.current?.setChannelMode(nextMode);
+    Object.values(triggerAudioRefs.current).forEach((player) => player.setChannelMode(nextMode));
   }
 
   function renderStageVolumeControls(song: Song) {
@@ -1112,6 +1452,96 @@ export default function App() {
           />
         </label>
       </div>
+    );
+  }
+
+  function renderTriggerSoundControls(song: Song) {
+    if (!hasTriggerSounds(song)) {
+      return null;
+    }
+
+    return (
+      <section className="trigger-sounds-live-panel">
+        <div>
+          <span className="section-label">Sonidos disparables</span>
+          <strong>{song.triggerSounds.length} cargado{song.triggerSounds.length === 1 ? "" : "s"}</strong>
+        </div>
+
+        <div className="trigger-sound-list">
+          {song.triggerSounds.map((sound, index) => {
+            const state = getTriggerSoundState(sound);
+            const volume = getTriggerSoundVolume(sound);
+            const duration = state.duration || sound.duration;
+            const elapsed = duration ? Math.min(state.elapsed, duration) : state.elapsed;
+            const progress = duration ? Math.min(Math.max((elapsed / duration) * 100, 0), 100) : 0;
+            const elapsedLabel = formatDuration(elapsed) || "0:00";
+            const durationLabel = formatDuration(duration) || "0:00";
+
+            return (
+              <article className="trigger-sound-live-item" key={sound.id}>
+                <div className="trigger-sound-header">
+                  <div>
+                    <span className="section-label">Sonido {index + 1}</span>
+                    <strong>{sound.fileName}</strong>
+                    <small>
+                      {elapsedLabel} / {durationLabel}
+                    </small>
+                  </div>
+                  <span className={state.isPlaying ? "stage-state playing" : "stage-state ready"}>
+                    {state.isPlaying ? "PLAYING" : state.isPaused ? "PAUSED" : "READY"}
+                  </span>
+                </div>
+
+                <div className="trigger-sound-progress" aria-hidden="true">
+                  <span style={{ width: `${progress}%` }} />
+                </div>
+
+                <div className="trigger-sound-grid">
+                  <label className="stage-volume-control">
+                    <span>
+                      VOL <strong>{formatVolumePercent(volume)}</strong>
+                    </span>
+                    <input
+                      aria-label={`Volumen de ${sound.fileName}`}
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      type="range"
+                      value={volume}
+                      onChange={(event) =>
+                        handleTriggerSoundVolumeChange(song.id, sound.id, Number(event.target.value))
+                      }
+                    />
+                  </label>
+
+                  <div className="trigger-sound-actions">
+                    <button
+                      className="stage-button play"
+                      type="button"
+                      onClick={() => handlePlayPauseTriggerSound(sound)}
+                    >
+                      {state.isPlaying ? "PAUSE" : state.isPaused ? "RESUME" : "PLAY"}
+                    </button>
+                    <button
+                      className="stage-button stop"
+                      type="button"
+                      onClick={() => void handleStopTriggerSound(sound)}
+                      disabled={!state.isPlaying && !state.isPaused && state.elapsed === 0}
+                    >
+                      STOP
+                    </button>
+                  </div>
+                </div>
+
+                <div className="stage-message compact-message">
+                  <span>{state.status}</span>
+                  {state.error && <span className="form-error">{state.error}</span>}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </section>
     );
   }
 
@@ -1600,6 +2030,7 @@ export default function App() {
                   setSongMode({ type: "create" });
                   setSongForm(emptySongForm);
                   setTrackError("");
+                  setTriggerSoundError("");
                   setIsSongEditorOpen((current) => !current);
                 }}
               >
@@ -1623,6 +2054,8 @@ export default function App() {
                           onClick={() => {
                             setSongMode({ type: "create" });
                             setSongForm(emptySongForm);
+                            setTrackError("");
+                            setTriggerSoundError("");
                             setIsSongEditorOpen(false);
                           }}
                         >
@@ -1769,6 +2202,65 @@ export default function App() {
                 </div>
               </div>
 
+              <div className="track-panel trigger-sound-editor-panel">
+                <div>
+                  <span className="section-label">Sonidos disparables</span>
+                  <p>
+                    {songForm.triggerSounds.length > 0
+                      ? `${songForm.triggerSounds.length} sonido${songForm.triggerSounds.length === 1 ? "" : "s"} cargado${songForm.triggerSounds.length === 1 ? "" : "s"}.`
+                      : "Sin sonidos disparables."}
+                  </p>
+                </div>
+                {songMode.type === "edit" ? (
+                  <>
+                    <label className="file-button">
+                      Agregar sonido disparable
+                      <input
+                        accept=".mp3,.wav,.m4a,.aac,audio/*"
+                        type="file"
+                        onChange={(event) => void handleTriggerSoundFileChange(event)}
+                      />
+                    </label>
+                    {songForm.triggerSounds.length > 0 && (
+                      <div className="trigger-sound-editor-list">
+                        {songForm.triggerSounds.map((sound, index) => (
+                          <article className="trigger-sound-editor-item" key={sound.id}>
+                            <div>
+                              <strong>
+                                {index + 1}. {sound.fileName}
+                              </strong>
+                              <span>{formatDuration(sound.duration)}</span>
+                            </div>
+                            <div className="track-actions">
+                              <label className="file-button secondary-file-button">
+                                Reemplazar
+                                <input
+                                  accept=".mp3,.wav,.m4a,.aac,audio/*"
+                                  type="file"
+                                  onChange={(event) =>
+                                    void handleTriggerSoundFileChange(event, sound.id)
+                                  }
+                                />
+                              </label>
+                              <button
+                                className="danger-button"
+                                type="button"
+                                onClick={() => void handleDeleteTriggerSound(sound)}
+                              >
+                                Eliminar
+                              </button>
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="empty-state">Guardá el tema para cargar sonidos disparables.</p>
+                )}
+                {triggerSoundError && <p className="form-error">{triggerSoundError}</p>}
+              </div>
+
               <button type="submit">{songMode.type === "edit" ? "Guardar tema" : "Crear tema"}</button>
             </form>
             )}
@@ -1784,6 +2276,7 @@ export default function App() {
                       <p>
                         {formatBpm(song.bpm)} BPM · {song.timeSignatureNumerator}/
                         {song.timeSignatureDenominator} · {describePlayback(song)}
+                        {describeTriggerSounds(song)}
                       </p>
                     </div>
                     <div className="song-actions">
@@ -1916,6 +2409,7 @@ export default function App() {
                     <span>
                       {formatBpm(song.bpm)} BPM · {song.timeSignatureNumerator}/
                       {song.timeSignatureDenominator} · {describePlayback(song)}
+                      {describeTriggerSounds(song)}
                     </span>
                     <div className="setlist-actions">
                       <button
@@ -1987,7 +2481,10 @@ export default function App() {
                   <span>{index + 1}</span>
                   <div>
                     <strong>{song.title}</strong>
-                    <small>{formatBpm(song.bpm)} BPM · {describePlayback(song)}</small>
+                    <small>
+                      {formatBpm(song.bpm)} BPM · {describePlayback(song)}
+                      {describeTriggerSounds(song)}
+                    </small>
                   </div>
                 </button>
               ))
@@ -2094,6 +2591,8 @@ export default function App() {
                   NEXT
                 </button>
               </div>
+
+              {renderTriggerSoundControls(liveSong)}
 
               <div className="stage-message">
                 <strong>{describePlayback(liveSong)}</strong>
@@ -2239,6 +2738,8 @@ export default function App() {
                   </button>
                 </div>
 
+                {renderTriggerSoundControls(liveSong)}
+
                 <aside className="next-song-panel">
                   <span className="section-label">Próxima canción</span>
                   {nextLiveSong ? (
@@ -2246,6 +2747,7 @@ export default function App() {
                       <strong>{nextLiveSong.title}</strong>
                       <p>
                         {formatBpm(nextLiveSong.bpm)} BPM · {describePlayback(nextLiveSong)}
+                        {describeTriggerSounds(nextLiveSong)}
                       </p>
                     </>
                   ) : (
@@ -2277,7 +2779,10 @@ export default function App() {
                       <span>{index + 1}</span>
                       <div>
                         <strong>{song.title}</strong>
-                        <small>{formatBpm(song.bpm)} BPM · {describePlayback(song)}</small>
+                        <small>
+                          {formatBpm(song.bpm)} BPM · {describePlayback(song)}
+                          {describeTriggerSounds(song)}
+                        </small>
                       </div>
                     </article>
                   ))}

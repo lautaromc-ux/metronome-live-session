@@ -1,3 +1,10 @@
+export type TriggerSound = {
+  id: string;
+  fileName: string;
+  duration: number;
+  volume: number;
+};
+
 export type Song = {
   id: string;
   title: string;
@@ -10,6 +17,7 @@ export type Song = {
   trackFileName: string;
   trackDuration: number;
   trackEnabled: boolean;
+  triggerSounds: TriggerSound[];
   clickEnabled: boolean;
   trackVolume: number;
   clickVolume: number;

@@ -1,6 +1,8 @@
 const DB_NAME = "metronomo-live-audio";
 const DB_VERSION = 1;
 const TRACK_STORE = "tracks";
+const TRIGGER_SOUND_KEY_PREFIX = "trigger-sound:";
+const LEGACY_CONTROLLED_TRACK_KEY_PREFIX = "controlled-track:";
 
 type StoredTrack = {
   songId: string;
@@ -48,9 +50,17 @@ async function runTrackTransaction<T>(
   });
 }
 
-export async function saveTrackFile(songId: string, file: File) {
+function getTriggerSoundKey(soundId: string) {
+  return `${TRIGGER_SOUND_KEY_PREFIX}${soundId}`;
+}
+
+function getLegacyControlledTrackKey(soundId: string) {
+  return `${LEGACY_CONTROLLED_TRACK_KEY_PREFIX}${soundId}`;
+}
+
+async function saveAudioFile(storageKey: string, file: File) {
   const storedTrack: StoredTrack = {
-    songId,
+    songId: storageKey,
     file,
     fileName: file.name,
     fileType: file.type,
@@ -60,9 +70,9 @@ export async function saveTrackFile(songId: string, file: File) {
   await runTrackTransaction("readwrite", (store) => store.put(storedTrack));
 }
 
-export async function getTrackFile(songId: string): Promise<File | null> {
+async function getAudioFile(storageKey: string): Promise<File | null> {
   const storedTrack = await runTrackTransaction<StoredTrack | undefined>("readonly", (store) =>
-    store.get(songId)
+    store.get(storageKey)
   );
 
   if (!storedTrack) {
@@ -74,7 +84,31 @@ export async function getTrackFile(songId: string): Promise<File | null> {
   });
 }
 
-export async function deleteTrackFile(songId: string) {
-  await runTrackTransaction("readwrite", (store) => store.delete(songId));
+async function deleteAudioFile(storageKey: string) {
+  await runTrackTransaction("readwrite", (store) => store.delete(storageKey));
 }
 
+export async function saveTrackFile(songId: string, file: File) {
+  await saveAudioFile(songId, file);
+}
+
+export async function getTrackFile(songId: string): Promise<File | null> {
+  return getAudioFile(songId);
+}
+
+export async function deleteTrackFile(songId: string) {
+  await deleteAudioFile(songId);
+}
+
+export async function saveTriggerSoundFile(soundId: string, file: File) {
+  await saveAudioFile(getTriggerSoundKey(soundId), file);
+}
+
+export async function getTriggerSoundFile(soundId: string): Promise<File | null> {
+  return (await getAudioFile(getTriggerSoundKey(soundId))) ?? getAudioFile(getLegacyControlledTrackKey(soundId));
+}
+
+export async function deleteTriggerSoundFile(soundId: string) {
+  await deleteAudioFile(getTriggerSoundKey(soundId));
+  await deleteAudioFile(getLegacyControlledTrackKey(soundId));
+}
