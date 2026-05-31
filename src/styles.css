@@ -540,9 +540,13 @@ label {
 
 .rehearsal-stage {
   display: grid;
-  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr) minmax(280px, 360px);
+  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
   gap: 1rem;
   align-items: start;
+}
+
+.rehearsal-stage.has-trigger-sounds {
+  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr) minmax(280px, 360px);
 }
 
 .rehearsal-song-list {
@@ -560,6 +564,10 @@ label {
 
 .rehearsal-trigger-side {
   align-self: start;
+}
+
+.rehearsal-player .stage-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .rehearsal-song-button {
@@ -1177,6 +1185,23 @@ label {
   color: #f4f7f5;
   padding: 0.85rem 1rem;
   text-align: left;
+}
+
+.live-song-chip > div {
+  min-width: 0;
+}
+
+.live-song-chip strong,
+.live-song-chip small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.live-song-chip strong {
+  display: block;
+  font-size: clamp(0.86rem, 1.25vw, 1rem);
+  line-height: 1.12;
 }
 
 .live-song-chip.active {

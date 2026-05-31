@@ -2486,7 +2486,9 @@ export default function App() {
           </div>
         </header>
 
-        <section className="rehearsal-stage">
+        <section
+          className={liveSong && hasTriggerSounds(liveSong) ? "rehearsal-stage has-trigger-sounds" : "rehearsal-stage"}
+        >
           <aside className="rehearsal-song-list">
             <span className="section-label">Temas del proyecto</span>
             {rehearsalSongs.length === 0 ? (
@@ -2627,7 +2629,9 @@ export default function App() {
             </section>
           )}
 
-          {liveSong && <aside className="stage-side rehearsal-trigger-side">{renderTriggerSoundControls(liveSong)}</aside>}
+          {liveSong && hasTriggerSounds(liveSong) && (
+            <aside className="stage-side rehearsal-trigger-side">{renderTriggerSoundControls(liveSong)}</aside>
+          )}
         </section>
       </main>
     );
