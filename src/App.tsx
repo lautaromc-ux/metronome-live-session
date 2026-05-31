@@ -326,6 +326,8 @@ export default function App() {
   const liveAudioRef = useRef<LiveAudioEngine | null>(null);
   const triggerAudioRefs = useRef<Record<string, ControlledAudioPlayer>>({});
   const liveStageRef = useRef<HTMLElement | null>(null);
+  const activeSetlistItemRef = useRef<HTMLElement | null>(null);
+  const activeRehearsalSongRef = useRef<HTMLButtonElement | null>(null);
 
   const selectedProject = useMemo(() => {
     return projects.find((project) => project.id === selectedProjectId) ?? projects[0] ?? null;
@@ -432,6 +434,25 @@ export default function App() {
       setLiveSongId(activePlaybackSongs[0]?.id ?? "");
     }
   }, [activePlaybackSongs, liveSongId]);
+
+  useEffect(() => {
+    if (!isPlaybackScreen || !liveSong) {
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      const activeItem =
+        appScreen === "rehearsal" ? activeRehearsalSongRef.current : activeSetlistItemRef.current;
+
+      activeItem?.scrollIntoView({
+        block: "center",
+        inline: "nearest",
+        behavior: "smooth"
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [appScreen, isPlaybackScreen, liveSong?.id]);
 
   useEffect(() => {
     if (!liveAudioRef.current) {
@@ -1462,7 +1483,7 @@ export default function App() {
 
     return (
       <section className="trigger-sounds-live-panel">
-        <div>
+        <div className="trigger-sounds-live-heading">
           <span className="section-label">Sonidos disparables</span>
           <strong>{song.triggerSounds.length} cargado{song.triggerSounds.length === 1 ? "" : "s"}</strong>
         </div>
@@ -1480,7 +1501,7 @@ export default function App() {
             return (
               <article className="trigger-sound-live-item" key={sound.id}>
                 <div className="trigger-sound-header">
-                  <div>
+                  <div className="trigger-sound-title">
                     <span className="section-label">Sonido {index + 1}</span>
                     <strong>{sound.fileName}</strong>
                     <small>
@@ -1496,8 +1517,8 @@ export default function App() {
                   <span style={{ width: `${progress}%` }} />
                 </div>
 
-                <div className="trigger-sound-grid">
-                  <label className="stage-volume-control">
+                <div className="trigger-sound-controls">
+                  <label className="trigger-sound-volume">
                     <span>
                       VOL <strong>{formatVolumePercent(volume)}</strong>
                     </span>
@@ -2475,6 +2496,7 @@ export default function App() {
                 <button
                   className={song.id === liveSong?.id ? "rehearsal-song-button active" : "rehearsal-song-button"}
                   key={song.id}
+                  ref={song.id === liveSong?.id ? activeRehearsalSongRef : null}
                   type="button"
                   onClick={() => void handleSelectLiveSong(song.id)}
                 >
@@ -2592,8 +2614,6 @@ export default function App() {
                 </button>
               </div>
 
-              {renderTriggerSoundControls(liveSong)}
-
               <div className="stage-message">
                 <strong>{describePlayback(liveSong)}</strong>
                 <span>{liveStatus}</span>
@@ -2606,6 +2626,8 @@ export default function App() {
               <p>Volvé al proyecto y cargá temas para poder ensayar.</p>
             </section>
           )}
+
+          {liveSong && <aside className="stage-side rehearsal-trigger-side">{renderTriggerSoundControls(liveSong)}</aside>}
         </section>
       </main>
     );
@@ -2738,8 +2760,6 @@ export default function App() {
                   </button>
                 </div>
 
-                {renderTriggerSoundControls(liveSong)}
-
                 <aside className="next-song-panel">
                   <span className="section-label">Próxima canción</span>
                   {nextLiveSong ? (
@@ -2768,25 +2788,30 @@ export default function App() {
                 </div>
               </div>
 
-              <aside className="stage-setlist">
-                <span className="section-label">Setlist</span>
-                <div className="live-setlist-strip">
-                  {selectedShowSongs.map((song, index) => (
-                    <article
-                      className={song.id === liveSong.id ? "live-song-chip active" : "live-song-chip"}
-                      key={song.id}
-                    >
-                      <span>{index + 1}</span>
-                      <div>
-                        <strong>{song.title}</strong>
-                        <small>
-                          {formatBpm(song.bpm)} BPM · {describePlayback(song)}
-                          {describeTriggerSounds(song)}
-                        </small>
-                      </div>
-                    </article>
-                  ))}
-                </div>
+              <aside className="stage-side">
+                <section className="stage-setlist">
+                  <span className="section-label">Setlist</span>
+                  <div className="live-setlist-strip">
+                    {selectedShowSongs.map((song, index) => (
+                      <article
+                        className={song.id === liveSong.id ? "live-song-chip active" : "live-song-chip"}
+                        key={song.id}
+                        ref={song.id === liveSong.id ? activeSetlistItemRef : null}
+                      >
+                        <span>{index + 1}</span>
+                        <div>
+                          <strong>{song.title}</strong>
+                          <small>
+                            {formatBpm(song.bpm)} BPM · {describePlayback(song)}
+                            {describeTriggerSounds(song)}
+                          </small>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+
+                {renderTriggerSoundControls(liveSong)}
               </aside>
             </div>
           </section>

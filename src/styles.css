@@ -540,7 +540,7 @@ label {
 
 .rehearsal-stage {
   display: grid;
-  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr) minmax(280px, 360px);
   gap: 1rem;
   align-items: start;
 }
@@ -551,9 +551,15 @@ label {
   border: 1px solid #2d3833;
   border-radius: 8px;
   background: #151b1d;
+  max-height: calc(100dvh - 140px);
+  overflow: auto;
   padding: 1rem;
   position: sticky;
   top: 16px;
+}
+
+.rehearsal-trigger-side {
+  align-self: start;
 }
 
 .rehearsal-song-button {
@@ -614,6 +620,13 @@ label {
 .stage-main {
   display: grid;
   gap: 0.65rem;
+}
+
+.stage-side {
+  display: grid;
+  gap: 0.75rem;
+  position: sticky;
+  top: 16px;
 }
 
 .stage-topline {
@@ -779,7 +792,7 @@ label {
 .trigger-sound-editor-list,
 .trigger-sound-list {
   display: grid;
-  gap: 0.75rem;
+  gap: 0.45rem;
 }
 
 .trigger-sound-editor-item {
@@ -805,22 +818,32 @@ label {
 .trigger-sounds-live-panel,
 .trigger-sound-live-item {
   display: grid;
-  gap: 0.55rem;
+  gap: 0.45rem;
   border: 1px solid #35483f;
   border-radius: 8px;
   background: #121b18;
-  padding: 0.7rem;
+  padding: 0.55rem;
 }
 
 .trigger-sound-live-item {
+  grid-template-columns: minmax(0, 1.15fr) minmax(150px, 0.8fr) minmax(170px, 0.7fr);
+  align-items: center;
   background: #101715;
+}
+
+.trigger-sounds-live-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
 }
 
 .trigger-sound-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.55rem;
+  min-width: 0;
 }
 
 .trigger-sound-header strong,
@@ -829,19 +852,26 @@ label {
   overflow-wrap: anywhere;
 }
 
+.trigger-sound-title {
+  min-width: 0;
+}
+
 .trigger-sound-header strong {
-  margin-top: 0.2rem;
-  font-size: clamp(1rem, 2.2vw, 1.35rem);
+  margin-top: 0.12rem;
+  font-size: clamp(0.9rem, 1.7vw, 1.12rem);
+  line-height: 1.1;
 }
 
 .trigger-sound-header small {
-  margin-top: 0.25rem;
+  margin-top: 0.16rem;
   color: #94a59d;
   font-weight: 900;
+  font-size: 0.72rem;
 }
 
 .trigger-sound-progress {
-  height: 9px;
+  grid-column: 1 / -1;
+  height: 5px;
   overflow: hidden;
   border: 1px solid #2d3833;
   border-radius: 999px;
@@ -861,19 +891,106 @@ label {
   gap: 0.55rem;
 }
 
+.trigger-sound-controls {
+  display: contents;
+}
+
+.trigger-sound-volume {
+  display: grid;
+  grid-template-columns: 4.4rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  border: 1px solid #2d3833;
+  border-radius: 8px;
+  background: #0f1516;
+  padding: 0.42rem 0.5rem;
+  color: #94a59d;
+  font-weight: 900;
+}
+
+.trigger-sound-volume span {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.trigger-sound-volume strong {
+  color: #f5f1e7;
+  font-size: 0.8rem;
+}
+
+.trigger-sound-volume input {
+  min-width: 0;
+  accent-color: #44b78b;
+}
+
 .trigger-sound-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.55rem;
+  gap: 0.38rem;
 }
 
 .trigger-sound-actions .stage-button {
-  min-height: 58px;
-  font-size: clamp(0.95rem, 1.8vw, 1.35rem);
+  min-height: 44px;
+  padding-inline: 0.45rem;
+  font-size: clamp(0.8rem, 1.35vw, 1rem);
 }
 
 .compact-message {
-  padding: 0.85rem;
+  grid-column: 1 / -1;
+  padding: 0.45rem 0.55rem;
+  min-height: 0;
+  font-size: 0.78rem;
+}
+
+.stage-side .trigger-sounds-live-panel {
+  max-height: min(32vh, 300px);
+  overflow: auto;
+}
+
+.stage-side .trigger-sound-live-item {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.4rem;
+}
+
+.stage-side .trigger-sound-header {
+  align-items: stretch;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.stage-side .trigger-sound-header .stage-state {
+  width: 100%;
+  min-width: 0;
+  padding: 0.28rem 0.5rem;
+  font-size: 0.72rem;
+}
+
+.stage-side .trigger-sound-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(132px, 0.7fr);
+  gap: 0.4rem;
+}
+
+.stage-side .trigger-sound-volume {
+  grid-template-columns: 3.8rem minmax(0, 1fr);
+  padding: 0.36rem 0.45rem;
+}
+
+.stage-side .trigger-sound-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.stage-side .trigger-sound-actions .stage-button {
+  min-height: 38px;
+}
+
+.stage-side .compact-message {
+  display: none;
 }
 
 .stage-progress {
@@ -975,14 +1092,13 @@ label {
   border-radius: 8px;
   background: #151b1d;
   padding: 1rem;
-  position: sticky;
-  top: 16px;
 }
 
 .stage-setlist .live-setlist-strip {
-  max-height: calc(100vh - 180px);
+  max-height: min(46vh, 430px);
   overflow: auto;
   padding-right: 0.15rem;
+  scroll-padding-block: 0.75rem;
 }
 
 .live-stage-status {
@@ -1143,18 +1259,39 @@ label {
   .workspace,
   .management-grid,
   .dashboard-grid,
-  .project-screen-grid,
-  .rehearsal-stage,
-  .stage-performance {
+  .project-screen-grid {
     grid-template-columns: 1fr;
   }
 
+  .stage-performance {
+    grid-template-columns: minmax(0, 1fr) minmax(250px, 330px);
+  }
+
+  .rehearsal-stage {
+    grid-template-columns: minmax(210px, 270px) minmax(0, 1fr);
+  }
+
+  .rehearsal-player {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+
+  .rehearsal-trigger-side {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
   .stage-setlist,
+  .stage-side,
   .rehearsal-song-list {
     position: static;
   }
 
   .stage-setlist .live-setlist-strip {
+    max-height: 34vh;
+  }
+
+  .stage-side .trigger-sounds-live-panel {
     max-height: none;
   }
 }
@@ -1197,10 +1334,38 @@ label {
   .song-grid,
   .add-song-form,
   .live-stage-grid,
+  .rehearsal-stage,
+  .stage-performance,
   .stage-indicators,
   .stage-volume-controls,
   .trigger-sound-grid {
     grid-template-columns: 1fr;
+  }
+
+  .rehearsal-player,
+  .rehearsal-trigger-side {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .rehearsal-song-list {
+    order: 1;
+  }
+
+  .rehearsal-trigger-side {
+    order: 2;
+  }
+
+  .rehearsal-player {
+    order: 3;
+  }
+
+  .stage-performance .stage-side {
+    order: 1;
+  }
+
+  .stage-performance .stage-main {
+    order: 2;
   }
 
   .live-header-actions,
@@ -1220,9 +1385,28 @@ label {
     gap: 0.45rem;
   }
 
+  .trigger-sound-live-item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .trigger-sound-header {
     align-items: stretch;
     flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .trigger-sound-controls {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(138px, 0.7fr);
+    gap: 0.45rem;
+  }
+
+  .trigger-sound-volume {
+    grid-template-columns: 3.8rem minmax(0, 1fr);
+  }
+
+  .trigger-sound-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .stage-state {
@@ -1277,8 +1461,7 @@ label {
   .live-toggle-grid,
   .live-main-actions,
   .live-next-actions,
-  .live-stage-controls,
-  .trigger-sound-actions {
+  .live-stage-controls {
     flex-wrap: wrap;
     grid-template-columns: 1fr;
   }
