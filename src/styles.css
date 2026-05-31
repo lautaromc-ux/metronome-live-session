@@ -334,7 +334,7 @@ label {
 
 .project-item strong,
 .show-item strong,
-song-card h3,
+.song-card h3,
 .setlist-item strong,
 .section-header h2 {
   overflow-wrap: anywhere;
@@ -485,7 +485,7 @@ song-card h3,
 }
 
 .track-actions,
-live-actions {
+.live-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.6rem;
