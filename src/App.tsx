@@ -33,8 +33,8 @@ type TriggerSoundPlaybackState = {
   error: string;
 };
 
-const adminName = "Lautaro MC";
-const adminPassword = "metro2026";
+const adminName = "Lautaro.MC";
+const adminPassword = "LautaroMC2026!";
 const defaultTrackVolume = 1;
 const defaultClickVolume = 0.4;
 
