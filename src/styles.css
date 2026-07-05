@@ -837,6 +837,12 @@ label {
   grid-template-columns: minmax(0, 1.15fr) minmax(150px, 0.8fr) minmax(170px, 0.7fr);
   align-items: center;
   background: #101715;
+  cursor: pointer;
+}
+
+.trigger-sound-live-item.selected {
+  border-color: #f2b84b;
+  background: #1d2118;
 }
 
 .trigger-sounds-live-heading {
@@ -1091,6 +1097,30 @@ label {
 
 .stage-message span {
   color: #94a59d;
+}
+
+.keyboard-help {
+  display: grid;
+  gap: 0.45rem;
+  border: 1px solid #2d3833;
+  border-radius: 8px;
+  background: #101517;
+  padding: 0.7rem;
+}
+
+.keyboard-help div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.keyboard-help div span {
+  border: 1px solid #35413d;
+  border-radius: 8px;
+  color: #c6d3cd;
+  font-size: 0.82rem;
+  font-weight: 800;
+  padding: 0.38rem 0.55rem;
 }
 
 .stage-setlist {
