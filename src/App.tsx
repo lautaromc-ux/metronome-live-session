@@ -242,6 +242,44 @@ function describeTriggerSounds(song: Song) {
   return ` · ${song.triggerSounds.length} disparable${song.triggerSounds.length === 1 ? "" : "s"}`;
 }
 
+function getShowSongLines(songs: Song[]) {
+  if (songs.length === 0) {
+    return ["Sin temas cargados."];
+  }
+
+  return songs.flatMap((song, index) => [
+    `${index + 1}. ${song.title || "-"}`,
+    `   BPM: ${formatBpm(song.bpm) || "-"}`,
+    `   Compas: ${
+      song.timeSignatureNumerator && song.timeSignatureDenominator
+        ? `${song.timeSignatureNumerator}/${song.timeSignatureDenominator}`
+        : "-"
+    }`,
+    `   Notas: ${song.notes || "-"}`,
+    `   Sonidos disparables: ${
+      song.triggerSounds.length > 0
+        ? song.triggerSounds.map((sound) => sound.fileName || "-").join(", ")
+        : "-"
+    }`
+  ]);
+}
+
+function isTypingTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  const tagName = target.tagName.toLowerCase();
+  return (
+    tagName === "input" ||
+    tagName === "textarea" ||
+    tagName === "select" ||
+    tagName === "button" ||
+    tagName === "a" ||
+    target.isContentEditable
+  );
+}
+
 function createTriggerSoundPlaybackState(sound?: TriggerSound): TriggerSoundPlaybackState {
   return {
     isPlaying: false,
@@ -318,6 +356,7 @@ export default function App() {
   const [triggerSoundStates, setTriggerSoundStates] = useState<
     Record<string, TriggerSoundPlaybackState>
   >({});
+  const [selectedTriggerSoundId, setSelectedTriggerSoundId] = useState<string | null>(null);
   const [isLiveFullscreen, setIsLiveFullscreen] = useState(false);
   const [liveStatus, setLiveStatus] = useState("Listo para probar salida.");
   const [liveError, setLiveError] = useState("");
@@ -483,9 +522,71 @@ export default function App() {
     setLiveDuration(liveSong ? getSongTimelineDuration(liveSong) : 0);
     setIsLiveTrackEnded(false);
     setTriggerSoundStates(createTriggerSoundPlaybackStates(liveSong?.triggerSounds ?? []));
+    setSelectedTriggerSoundId(liveSong?.triggerSounds[0]?.id ?? null);
     setLiveStatus("Listo para probar salida.");
     setLiveError("");
   }, [liveSong?.id]);
+
+  useEffect(() => {
+    if (!liveSong?.triggerSounds.length) {
+      setSelectedTriggerSoundId(null);
+      return;
+    }
+
+    setSelectedTriggerSoundId((currentSoundId) =>
+      currentSoundId && liveSong.triggerSounds.some((sound) => sound.id === currentSoundId)
+        ? currentSoundId
+        : liveSong.triggerSounds[0].id
+    );
+  }, [liveSong]);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (!isPlaybackScreen || !liveSong || isTypingTarget(event.target) || event.repeat) {
+        return;
+      }
+
+      if (event.key === " ") {
+        event.preventDefault();
+        handlePlayPauseLiveSong();
+        return;
+      }
+
+      if (event.key.toLowerCase() === "n") {
+        event.preventDefault();
+        void handleMoveLiveSong(1);
+        return;
+      }
+
+      if (event.key.toLowerCase() === "p") {
+        event.preventDefault();
+        void handleMoveLiveSong(-1);
+        return;
+      }
+
+      if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+        if (!liveSong.triggerSounds.length) {
+          return;
+        }
+
+        event.preventDefault();
+        moveSelectedTriggerSound(event.key === "ArrowRight" ? 1 : -1);
+        return;
+      }
+
+      if (event.key === "Enter" && selectedTriggerSoundId) {
+        const selectedSound = liveSong.triggerSounds.find((sound) => sound.id === selectedTriggerSoundId);
+
+        if (selectedSound) {
+          event.preventDefault();
+          handlePlayPauseTriggerSound(selectedSound);
+        }
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isPlaybackScreen, liveSong, selectedTriggerSoundId, isLivePlaying, isLivePaused, liveSongIndex]);
 
   useEffect(() => {
     if (!isPlaybackScreen || !liveSong) {
@@ -1374,6 +1475,22 @@ export default function App() {
     void handleStartTriggerSound(sound);
   }
 
+  function moveSelectedTriggerSound(direction: -1 | 1) {
+    if (!liveSong?.triggerSounds.length) {
+      return;
+    }
+
+    const currentIndex = selectedTriggerSoundId
+      ? liveSong.triggerSounds.findIndex((sound) => sound.id === selectedTriggerSoundId)
+      : -1;
+    const nextIndex =
+      currentIndex < 0
+        ? 0
+        : (currentIndex + direction + liveSong.triggerSounds.length) % liveSong.triggerSounds.length;
+
+    setSelectedTriggerSoundId(liveSong.triggerSounds[nextIndex].id);
+  }
+
   function handleSeekLiveSong(position: number) {
     if (!liveDuration) {
       return;
@@ -1430,6 +1547,21 @@ export default function App() {
     setChannelMode(nextMode);
     liveAudioRef.current?.setChannelMode(nextMode);
     Object.values(triggerAudioRefs.current).forEach((player) => player.setChannelMode(nextMode));
+  }
+
+  function renderKeyboardHelp() {
+    return (
+      <section className="keyboard-help">
+        <span className="section-label">Atajos</span>
+        <div>
+          <span>Espacio: Play / Pausa</span>
+          <span>N: Siguiente tema</span>
+          <span>P: Tema anterior</span>
+          <span>Flechas izquierda/derecha: seleccionar sonido</span>
+          <span>Enter: disparar sonido seleccionado</span>
+        </div>
+      </section>
+    );
   }
 
   function renderStageVolumeControls(song: Song) {
@@ -1497,9 +1629,16 @@ export default function App() {
             const progress = duration ? Math.min(Math.max((elapsed / duration) * 100, 0), 100) : 0;
             const elapsedLabel = formatDuration(elapsed) || "0:00";
             const durationLabel = formatDuration(duration) || "0:00";
+            const isSelected = sound.id === selectedTriggerSoundId;
 
             return (
-              <article className="trigger-sound-live-item" key={sound.id}>
+              <article
+                className={
+                  isSelected ? "trigger-sound-live-item selected" : "trigger-sound-live-item"
+                }
+                key={sound.id}
+                onClick={() => setSelectedTriggerSoundId(sound.id)}
+              >
                 <div className="trigger-sound-header">
                   <div className="trigger-sound-title">
                     <span className="section-label">Sonido {index + 1}</span>
@@ -1681,10 +1820,47 @@ export default function App() {
       shows: project.shows.filter((currentShow) => currentShow.id !== showId)
     }));
 
+    if (selectedShowId === showId) {
+      const nextShow = selectedProject.shows.find((currentShow) => currentShow.id !== showId);
+      setSelectedShowId(nextShow?.id ?? null);
+      setLiveViewShowId((currentShowId) => (currentShowId === showId ? null : currentShowId));
+      setAppScreen(nextShow ? "project" : "project");
+    }
+
     if (showMode.type === "edit" && showMode.showId === showId) {
       setShowMode({ type: "create" });
       setShowForm(emptyShowForm);
     }
+  }
+
+  function handleExportSelectedShow() {
+    if (!selectedShow) {
+      setLiveError("No hay show seleccionado para exportar.");
+      return;
+    }
+
+    const lines = [
+      `Show: ${selectedShow.title || "-"}`,
+      `Fecha: ${selectedShow.date || "-"}`,
+      `Notas: ${selectedShow.notes || "-"}`,
+      "",
+      "Temas:",
+      ...getShowSongLines(selectedShowSongs)
+    ];
+    const blob = new Blob([`${lines.join("\n")}\n`], { type: "text/plain;charset=utf-8" });
+    const link = document.createElement("a");
+    const safeTitle = (selectedShow.title || "show")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .toLowerCase();
+
+    link.href = URL.createObjectURL(blob);
+    link.download = `${safeTitle || "show"}-setlist.txt`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+    setLiveError("");
   }
 
   function handleAddSongToShow(event: FormEvent<HTMLFormElement>) {
@@ -2008,6 +2184,13 @@ export default function App() {
                         disabled={show.songIds.length === 0}
                       >
                         Modo Live
+                      </button>
+                      <button
+                        className="danger-button"
+                        type="button"
+                        onClick={() => handleDeleteShow(show.id)}
+                      >
+                        Borrar
                       </button>
                     </div>
                   </article>
@@ -2362,8 +2545,18 @@ export default function App() {
                 >
                   Entrar en Modo Live
                 </button>
+                <button className="secondary-button" type="button" onClick={handleExportSelectedShow}>
+                  Exportar TXT
+                </button>
                 <button type="button" onClick={() => handleEditShow(selectedShow)}>
                   Editar datos
+                </button>
+                <button
+                  className="danger-button"
+                  type="button"
+                  onClick={() => handleDeleteShow(selectedShow.id)}
+                >
+                  Borrar show
                 </button>
               </div>
             </div>
@@ -2621,6 +2814,8 @@ export default function App() {
                 <span>{liveStatus}</span>
                 {liveError && <span className="form-error">{liveError}</span>}
               </div>
+
+              {renderKeyboardHelp()}
             </div>
           ) : (
             <section className="empty-panel">
@@ -2790,6 +2985,8 @@ export default function App() {
                   <span>{liveStatus}</span>
                   {liveError && <span className="form-error">{liveError}</span>}
                 </div>
+
+                {renderKeyboardHelp()}
               </div>
 
               <aside className="stage-side">
