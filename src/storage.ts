@@ -80,6 +80,7 @@ function normalizeSongs(value: unknown): Song[] {
       trackEnabled: Boolean(song.trackEnabled ?? false),
       triggerSounds: legacyControlledSound,
       clickEnabled: song.clickEnabled ?? true,
+      clickAccentEnabled: song.clickAccentEnabled ?? true,
       trackVolume: normalizeVolume(song.trackVolume, DEFAULT_TRACK_VOLUME),
       clickVolume: normalizeVolume(song.clickVolume, DEFAULT_CLICK_VOLUME)
     };

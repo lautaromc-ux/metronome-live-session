@@ -56,6 +56,7 @@ const emptySongForm: SongForm = {
   trackEnabled: false,
   triggerSounds: [],
   clickEnabled: true,
+  clickAccentEnabled: true,
   trackVolume: defaultTrackVolume,
   clickVolume: defaultClickVolume
 };
@@ -120,6 +121,7 @@ function normalizeSongForm(form: SongForm): SongForm {
       volume: clampVolume(sound.volume, defaultTrackVolume)
     })),
     clickEnabled: form.clickEnabled,
+    clickAccentEnabled: form.clickAccentEnabled,
     trackVolume: clampVolume(form.trackVolume, defaultTrackVolume),
     clickVolume: clampVolume(form.clickVolume, defaultClickVolume)
   };
@@ -907,6 +909,7 @@ export default function App() {
       trackEnabled: song.trackEnabled,
       triggerSounds: song.triggerSounds,
       clickEnabled: song.clickEnabled,
+      clickAccentEnabled: song.clickAccentEnabled,
       trackVolume: getTrackVolume(song),
       clickVolume: getClickVolume(song)
     });
@@ -2391,6 +2394,19 @@ export default function App() {
                       }
                     />
                     Click activo
+                  </label>
+                  <label className="switch-row">
+                    <input
+                      checked={songForm.clickAccentEnabled}
+                      type="checkbox"
+                      onChange={(event) =>
+                        setSongForm((current) => ({
+                          ...current,
+                          clickAccentEnabled: event.target.checked
+                        }))
+                      }
+                    />
+                    Acento de compás
                   </label>
                   <label className="switch-row">
                     <input

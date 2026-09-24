@@ -19,6 +19,7 @@ export type Song = {
   trackEnabled: boolean;
   triggerSounds: TriggerSound[];
   clickEnabled: boolean;
+  clickAccentEnabled: boolean;
   trackVolume: number;
   clickVolume: number;
 };

@@ -144,7 +144,11 @@ export class LiveAudioEngine {
     this.trackStartOffsetSeconds = countInBeats * this.beatInterval;
     this.shouldRunClickLoop = Boolean(clickStartsEnabled || this.activeTrackBuffer);
     this.activeClickLoopBuffer = this.shouldRunClickLoop
-      ? this.createClickLoopBuffer(context, song.timeSignatureNumerator)
+      ? this.createClickLoopBuffer(
+          context,
+          song.timeSignatureNumerator,
+          song.clickAccentEnabled !== false
+        )
       : null;
     this.clickLoopDurationSeconds = this.activeClickLoopBuffer?.duration ?? 0;
     this.trackEnded = false;
@@ -401,7 +405,11 @@ export class LiveAudioEngine {
     return createMonoAudioBuffer(context, trackBuffer);
   }
 
-  private createClickLoopBuffer(context: AudioContext, timeSignatureNumerator: number) {
+  private createClickLoopBuffer(
+    context: AudioContext,
+    timeSignatureNumerator: number,
+    accentEnabled: boolean
+  ) {
     const sampleRate = context.sampleRate;
     const beatsInLoop = Math.max(1, timeSignatureNumerator * CLICK_LOOP_BARS);
     const durationSeconds = beatsInLoop * this.beatInterval;
@@ -414,7 +422,7 @@ export class LiveAudioEngine {
     for (let beatIndex = 0; beatIndex < beatsInLoop; beatIndex += 1) {
       const beatTime = getBeatTime(0, beatIndex, this.beatInterval);
       const startFrame = Math.round(beatTime * sampleRate);
-      const isAccent = beatIndex % timeSignatureNumerator === 0;
+      const isAccent = accentEnabled && beatIndex % timeSignatureNumerator === 0;
 
       this.renderClick(output, startFrame, sampleRate, isAccent);
     }
