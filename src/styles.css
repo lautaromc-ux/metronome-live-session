@@ -1310,12 +1310,243 @@ label {
   font-weight: 800;
 }
 
+.tempo-finder {
+  position: relative;
+  overflow: hidden;
+  border-color: #3c594e;
+  background:
+    radial-gradient(circle at 95% 0%, rgba(68, 183, 139, 0.16), transparent 34%),
+    #151b1d;
+}
+
+.tempo-finder::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: #44b78b;
+  content: "";
+}
+
+.tempo-finder-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+}
+
+.tempo-finder-heading h2,
+.tempo-finder-heading p,
+.tempo-method h3,
+.tempo-method p {
+  margin: 0;
+}
+
+.tempo-finder-heading h2 {
+  margin-top: 0.3rem;
+  font-size: clamp(1.6rem, 3vw, 2.4rem);
+}
+
+.tempo-finder-heading p,
+.tempo-method p {
+  color: #94a59d;
+}
+
+.tempo-finder-heading p {
+  margin-top: 0.35rem;
+}
+
+.tempo-result {
+  display: grid;
+  min-width: 180px;
+  border: 1px solid #4d7565;
+  border-radius: 8px;
+  background: #0f1714;
+  padding: 0.75rem 1rem;
+  text-align: right;
+}
+
+.tempo-result span,
+.tempo-result small {
+  color: #91e3bd;
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.tempo-result strong {
+  color: #f2b84b;
+  font-size: clamp(2rem, 4vw, 3.2rem);
+  line-height: 1;
+}
+
+.tempo-method-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.tempo-method {
+  display: grid;
+  align-content: space-between;
+  gap: 0.9rem;
+  min-width: 0;
+  border: 1px solid #2d3833;
+  border-radius: 8px;
+  background: rgba(16, 21, 23, 0.84);
+  padding: 1rem;
+}
+
+.tempo-method-number {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: #f2b84b;
+  font-size: 0.75rem;
+  font-weight: 900;
+}
+
+.tempo-method h3 {
+  font-size: 1.15rem;
+}
+
+.tempo-method p {
+  margin-top: 0.35rem;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.tap-tempo-button {
+  display: grid;
+  min-height: 98px;
+  place-content: center;
+  border: 1px solid #77d8b3;
+  background: #44b78b;
+  font-size: 2rem;
+  line-height: 1;
+  touch-action: manipulation;
+  user-select: none;
+}
+
+.tap-tempo-button:active {
+  transform: scale(0.985);
+}
+
+.tap-tempo-button small {
+  margin-top: 0.42rem;
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.text-button,
+.inline-tempo-button {
+  min-height: 0;
+  background: transparent;
+  color: #91e3bd;
+  padding: 0;
+}
+
+.text-button:hover,
+.inline-tempo-button:hover {
+  background: transparent;
+  color: #b4f1d5;
+}
+
+.listening-button {
+  background: #c9554d;
+  color: #170403;
+}
+
+.listening-button span {
+  display: inline-block;
+  width: 0.7rem;
+  height: 0.7rem;
+  margin-right: 0.35rem;
+  border-radius: 999px;
+  background: currentColor;
+  animation: listening-pulse 1s ease-in-out infinite;
+}
+
+.file-button.disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.tempo-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  border-top: 1px solid #2d3833;
+  color: #c6d3cd;
+  padding-top: 0.85rem;
+  font-size: 0.9rem;
+}
+
+.tempo-status > strong {
+  color: #ff8b83;
+}
+
+.tempo-adjustments,
+.field-label-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.tempo-adjustments {
+  margin-left: auto;
+  color: #94a59d;
+  white-space: nowrap;
+}
+
+.tempo-adjustments button {
+  min-height: 36px;
+  background: #2a3336;
+  color: #f4f7f5;
+  padding: 0.45rem 0.7rem;
+}
+
+.field-label-row {
+  justify-content: space-between;
+}
+
+.field-group {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.field-label-row > label {
+  display: block;
+}
+
+.inline-tempo-button {
+  width: auto;
+  font-size: 0.78rem;
+}
+
+@keyframes listening-pulse {
+  50% {
+    opacity: 0.25;
+    transform: scale(0.72);
+  }
+}
+
 @media (max-width: 1060px) {
   .workspace,
   .management-grid,
   .dashboard-grid,
-  .project-screen-grid {
+  .project-screen-grid,
+  .tempo-method-grid {
     grid-template-columns: 1fr;
+  }
+
+  .tempo-method {
+    grid-template-columns: minmax(0, 1fr) minmax(190px, 0.55fr);
+    align-items: center;
+  }
+
+  .tempo-method .text-button {
+    grid-column: 2;
   }
 
   .stage-performance {
@@ -1362,9 +1593,29 @@ label {
   .app-header,
   .live-stage-header,
   .section-header,
-  .song-card {
+  .song-card,
+  .tempo-finder-heading,
+  .tempo-status {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .tempo-result {
+    text-align: left;
+  }
+
+  .tempo-method {
+    grid-template-columns: 1fr;
+  }
+
+  .tempo-method .text-button {
+    grid-column: auto;
+  }
+
+  .tempo-adjustments {
+    display: grid;
+    grid-template-columns: 1fr repeat(2, auto);
+    margin-left: 0;
   }
 
   .live-stage-header {
@@ -1531,5 +1782,10 @@ label {
   .file-button,
   button {
     width: 100%;
+  }
+
+  .inline-tempo-button,
+  .tempo-adjustments button {
+    width: auto;
   }
 }

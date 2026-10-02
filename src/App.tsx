@@ -8,6 +8,7 @@ import {
   saveTrackFile
 } from "./audioStorage";
 import { ControlledAudioPlayer, LiveAudioEngine, type AudioChannelMode } from "./liveAudio";
+import TempoFinder from "./TempoFinder";
 import {
   createProjectsBackup,
   loadAdminSession,
@@ -364,6 +365,7 @@ export default function App() {
   const [liveError, setLiveError] = useState("");
   const [backupStatus, setBackupStatus] = useState("");
   const [backupError, setBackupError] = useState("");
+  const [detectedBpm, setDetectedBpm] = useState<number | null>(null);
   const liveAudioRef = useRef<LiveAudioEngine | null>(null);
   const triggerAudioRefs = useRef<Record<string, ControlledAudioPlayer>>({});
   const liveStageRef = useRef<HTMLElement | null>(null);
@@ -1989,6 +1991,8 @@ export default function App() {
           </span>
         </section>
 
+        <TempoFinder onTempoDetected={setDetectedBpm} />
+
         <section className="dashboard-grid">
           <form className="panel-section form-stack" onSubmit={handleCreateProject}>
             <h2>Crear nuevo proyecto</h2>
@@ -2282,9 +2286,23 @@ export default function App() {
                     required
                   />
                 </label>
-                <label>
-                  BPM
+                <div className="field-group">
+                  <span className="field-label-row">
+                    <label htmlFor="song-bpm">BPM</label>
+                    {detectedBpm ? (
+                      <button
+                        className="inline-tempo-button"
+                        type="button"
+                        onClick={() =>
+                          setSongForm((current) => ({ ...current, bpm: detectedBpm }))
+                        }
+                      >
+                        Usar {formatBpm(detectedBpm)}
+                      </button>
+                    ) : null}
+                  </span>
                   <input
+                    id="song-bpm"
                     min={20}
                     max={300}
                     step={0.01}
@@ -2294,7 +2312,7 @@ export default function App() {
                       setSongForm((current) => ({ ...current, bpm: Number(event.target.value) }))
                     }
                   />
-                </label>
+                </div>
                 <label>
                   Compás arriba
                   <input
