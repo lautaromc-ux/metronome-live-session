@@ -154,6 +154,10 @@ label {
   color: #d8c797;
 }
 
+.dashboard-data-notice {
+  margin: 0;
+}
+
 .app-header h1,
 .live-stage-header h1,
 .section-header h2,

@@ -1983,14 +1983,6 @@ export default function App() {
           </button>
         </header>
 
-        <section className="local-data-notice">
-          <strong>Datos locales</strong>
-          <span>
-            Los proyectos, canciones y shows se guardan en este dispositivo. Para pasar datos a otro
-            celular, usá exportar/importar backup.
-          </span>
-        </section>
-
         <section className="dashboard-workspace">
           <TempoFinder onTempoDetected={setDetectedBpm} />
 
@@ -2070,7 +2062,6 @@ export default function App() {
               <div>
                 <span className="section-label">Backup</span>
                 <h2>Exportar / importar</h2>
-                <p>Incluye proyectos, canciones y shows. No incluye archivos de audio.</p>
               </div>
               <div className="backup-actions">
                 <button type="button" onClick={handleExportBackup}>
@@ -2085,6 +2076,14 @@ export default function App() {
               {backupError && <p className="form-error">{backupError}</p>}
             </section>
           </div>
+        </section>
+
+        <section className="local-data-notice dashboard-data-notice">
+          <strong>Datos locales</strong>
+          <span>
+            Los proyectos, canciones y shows se guardan en este dispositivo. Para pasar datos a otro
+            celular, usá exportar/importar backup.
+          </span>
         </section>
       </main>
     );

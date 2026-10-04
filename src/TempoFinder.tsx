@@ -41,7 +41,7 @@ export default function TempoFinder({ onTempoDetected }: TempoFinderProps) {
   const [source, setSource] = useState<DetectionSource>("tap");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [status, setStatus] = useState("Marcá al menos 4 pulsos parejos.");
+  const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const streamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -108,7 +108,7 @@ export default function TempoFinder({ onTempoDetected }: TempoFinderProps) {
 
   function resetTap() {
     setTapTimes([]);
-    setStatus("Marcá al menos 4 pulsos parejos.");
+    setStatus("");
     setError("");
   }
 
@@ -246,7 +246,6 @@ export default function TempoFinder({ onTempoDetected }: TempoFinderProps) {
         <div>
           <span className="section-label">Herramienta rápida</span>
           <h2 id="tempo-finder-title">Sacar tempo</h2>
-          <p>Marcá el pulso, cargá un audio o dejá que el micrófono escuche el tema.</p>
         </div>
         {estimate ? <ResultCard estimate={estimate} source={source} /> : null}
       </div>
@@ -256,7 +255,6 @@ export default function TempoFinder({ onTempoDetected }: TempoFinderProps) {
           <div>
             <span className="tempo-method-number">01</span>
             <h3>Tap tempo</h3>
-            <p>Tocá al ritmo de la negra. Se reinicia solo después de 2,5 segundos.</p>
           </div>
           <button className="tap-tempo-button" type="button" onClick={handleTap}>
             TAP
@@ -271,7 +269,6 @@ export default function TempoFinder({ onTempoDetected }: TempoFinderProps) {
           <div>
             <span className="tempo-method-number">02</span>
             <h3>Cargar un tema</h3>
-            <p>Analiza hasta los primeros 3 minutos. Funciona mejor con batería o ataques claros.</p>
           </div>
           <label className={isAnalyzing ? "file-button disabled" : "file-button"}>
             {isAnalyzing ? "Analizando..." : "Elegir audio"}
@@ -288,7 +285,6 @@ export default function TempoFinder({ onTempoDetected }: TempoFinderProps) {
           <div>
             <span className="tempo-method-number">03</span>
             <h3>Escuchar el tema</h3>
-            <p>Usa el micrófono durante un máximo de 25 segundos. El audio no se guarda.</p>
           </div>
           {isListening ? (
             <button className="listening-button" type="button" onClick={() => void stopMicrophone()}>
@@ -302,17 +298,19 @@ export default function TempoFinder({ onTempoDetected }: TempoFinderProps) {
         </article>
       </div>
 
-      <div className="tempo-status">
-        <span>{status}</span>
-        {error ? <strong>{error}</strong> : null}
-        {estimate ? (
-          <div className="tempo-adjustments">
-            <span>¿Marcó medio/doble tempo?</span>
-            <button type="button" onClick={() => adjustTempo(0.5)}>÷ 2</button>
-            <button type="button" onClick={() => adjustTempo(2)}>× 2</button>
-          </div>
-        ) : null}
-      </div>
+      {status || error || estimate ? (
+        <div className="tempo-status">
+          {status ? <span>{status}</span> : null}
+          {error ? <strong>{error}</strong> : null}
+          {estimate ? (
+            <div className="tempo-adjustments">
+              <span>¿Marcó medio/doble tempo?</span>
+              <button type="button" onClick={() => adjustTempo(0.5)}>÷ 2</button>
+              <button type="button" onClick={() => adjustTempo(2)}>× 2</button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </section>
   );
 }
