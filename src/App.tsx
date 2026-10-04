@@ -24,7 +24,7 @@ type SongForm = Omit<Song, "id">;
 type ShowForm = Pick<Show, "title" | "date" | "notes">;
 type SongMode = { type: "create" } | { type: "edit"; songId: string };
 type ShowMode = { type: "create" } | { type: "edit"; showId: string };
-type AppScreen = "dashboard" | "project" | "show" | "live" | "rehearsal";
+type AppScreen = "dashboard" | "project" | "show" | "live" | "rehearsal" | "show-rehearsal";
 type TriggerSoundPlaybackState = {
   isPlaying: boolean;
   isPaused: boolean;
@@ -301,22 +301,6 @@ function createTriggerSoundPlaybackStates(sounds: TriggerSound[]) {
   }, {});
 }
 
-function isCoverSong(song: Song) {
-  const optionalCoverFields = song as Song & {
-    cover?: boolean;
-    isCover?: boolean;
-    songType?: string;
-    type?: string;
-  };
-
-  return Boolean(
-    optionalCoverFields.cover ||
-      optionalCoverFields.isCover ||
-      optionalCoverFields.songType === "cover" ||
-      optionalCoverFields.type === "cover"
-  );
-}
-
 function formatShowDate(value: string) {
   if (!value) {
     return "Sin fecha";
@@ -395,11 +379,12 @@ export default function App() {
   }, [selectedProject, selectedShow]);
 
   const rehearsalSongs = useMemo(() => {
-    return selectedProject?.songs.filter((song) => !isCoverSong(song)) ?? [];
+    return selectedProject?.songs ?? [];
   }, [selectedProject]);
 
   const activePlaybackSongs = appScreen === "rehearsal" ? rehearsalSongs : selectedShowSongs;
-  const isPlaybackScreen = appScreen === "live" || appScreen === "rehearsal";
+  const isPlaybackScreen =
+    appScreen === "live" || appScreen === "rehearsal" || appScreen === "show-rehearsal";
 
   const availableSongsForShow = useMemo(() => {
     if (!selectedProject || !selectedShow) {
@@ -1205,6 +1190,29 @@ export default function App() {
     setAppScreen("live");
   }
 
+  function handleOpenShowRehearsal(show: Show) {
+    if (show.songIds.length === 0) {
+      setLiveError("Agregá temas al show antes de ensayarlo.");
+      return;
+    }
+
+    setSelectedShowId(show.id);
+    setLiveViewShowId(show.id);
+    const firstSongId = show.songIds[0] ?? "";
+    const firstSong = selectedProject?.songs.find((song) => song.id === firstSongId);
+
+    setLiveSongId(firstSongId);
+    setLiveElapsed(0);
+    setIsLivePlaying(false);
+    setIsLivePaused(false);
+    setIsLiveTrackEnded(false);
+    setLiveStatus("Listo para ensayar el show.");
+    setLiveError("");
+    setTriggerSoundError("");
+    setTriggerSoundStates(createTriggerSoundPlaybackStates(firstSong?.triggerSounds ?? []));
+    setAppScreen("show-rehearsal");
+  }
+
   function handleOpenRehearsalView() {
     if (!selectedProject) {
       return;
@@ -1975,8 +1983,10 @@ export default function App() {
         <header className="app-header">
           <div>
             <span className="app-kicker">metronomo-live</span>
-            <h1>Proyectos</h1>
-            <p>{projects.length} proyectos/bandas cargados</p>
+            <h1>Tus proyectos</h1>
+            <p>
+              {projects.length} {projects.length === 1 ? "proyecto musical" : "proyectos musicales"}
+            </p>
           </div>
           <button className="secondary-button" type="button" onClick={handleLogout}>
             Salir
@@ -1987,6 +1997,43 @@ export default function App() {
           <TempoFinder onTempoDetected={setDetectedBpm} />
 
           <div className="dashboard-project-column">
+            <section className="panel-section dashboard-projects-panel">
+              <div className="section-header compact">
+                <div>
+                  <span className="section-label">Elegí dónde trabajar</span>
+                  <h2>Proyectos</h2>
+                </div>
+                <strong className="project-count">{projects.length}</strong>
+              </div>
+
+              <div className="project-card-grid">
+                {projects.length === 0 ? (
+                  <div className="empty-panel compact-empty-panel">
+                    <h2>Sin proyectos</h2>
+                    <p>Creá tu primer proyecto para cargar temas y armar shows.</p>
+                  </div>
+                ) : (
+                  projects.map((project) => (
+                    <button
+                      className="project-card"
+                      key={project.id}
+                      type="button"
+                      onClick={() => handleOpenProject(project.id)}
+                    >
+                      <span className="project-card-label">Proyecto musical</span>
+                      <strong>{project.name}</strong>
+                      {project.description ? <span>{project.description}</span> : null}
+                      <span className="project-card-meta">
+                        <span>{project.songs.length} temas</span>
+                        <span>{project.shows.length} shows</span>
+                        <b>Abrir proyecto →</b>
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </section>
+
             <form
               className="panel-section form-stack create-project-panel"
               onSubmit={handleCreateProject}
@@ -2023,40 +2070,6 @@ export default function App() {
                 <button type="submit">Crear proyecto</button>
               </div>
             </form>
-
-            <section className="panel-section dashboard-projects-panel">
-              <div className="section-header compact">
-                <div>
-                  <span className="section-label">Biblioteca</span>
-                  <h2>Proyectos creados</h2>
-                </div>
-                <strong className="project-count">{projects.length}</strong>
-              </div>
-
-              <div className="project-card-grid">
-                {projects.length === 0 ? (
-                  <div className="empty-panel compact-empty-panel">
-                    <h2>Sin proyectos</h2>
-                    <p>Creá tu primera banda/proyecto para cargar temas y shows.</p>
-                  </div>
-                ) : (
-                  projects.map((project) => (
-                    <button
-                      className="project-card"
-                      key={project.id}
-                      type="button"
-                      onClick={() => handleOpenProject(project.id)}
-                    >
-                      <strong>{project.name}</strong>
-                      <span>{project.description || "Sin descripción"}</span>
-                      <small>
-                        {project.songs.length} temas · {project.shows.length} shows
-                      </small>
-                    </button>
-                  ))
-                )}
-              </div>
-            </section>
 
             <section className="backup-panel dashboard-backup-panel">
               <div>
@@ -2206,7 +2219,7 @@ export default function App() {
                     </div>
                     <div className="song-actions">
                       <button type="button" onClick={() => handleOpenShow(show.id)}>
-                        Abrir / editar
+                        Preparar show
                       </button>
                       <button
                         className="secondary-button"
@@ -2215,13 +2228,6 @@ export default function App() {
                         disabled={show.songIds.length === 0}
                       >
                         Modo Live
-                      </button>
-                      <button
-                        className="danger-button"
-                        type="button"
-                        onClick={() => handleDeleteShow(show.id)}
-                      >
-                        Borrar
                       </button>
                     </div>
                   </article>
@@ -2235,22 +2241,17 @@ export default function App() {
             <div className="section-header compact">
               <div>
                 <span className="section-label">Ensayo</span>
-                <h2>Modo Ensayo</h2>
-                <p>Reproducí temas sueltos del proyecto sin crear un show.</p>
+                <h2>Ensayo libre</h2>
+                <p>Probá cualquier tema del repertorio sin seguir un setlist.</p>
               </div>
               <button
                 type="button"
                 onClick={handleOpenRehearsalView}
                 disabled={rehearsalSongs.length === 0}
               >
-                Modo Ensayo
+                Ensayar repertorio
               </button>
             </div>
-            {selectedProject.songs.length > rehearsalSongs.length && (
-              <p className="empty-state">
-                Hay temas marcados como cover ocultos del ensayo.
-              </p>
-            )}
           </section>
 
           <section className="panel-section">
@@ -2598,10 +2599,18 @@ export default function App() {
               <div className="song-actions">
                 <button
                   type="button"
+                  onClick={() => handleOpenShowRehearsal(selectedShow)}
+                  disabled={selectedShowSongs.length === 0}
+                >
+                  Ensayar show
+                </button>
+                <button
+                  className="live-mode-button"
+                  type="button"
                   onClick={() => handleOpenLiveView(selectedShow)}
                   disabled={selectedShowSongs.length === 0}
                 >
-                  Entrar en Modo Live
+                  Modo escenario
                 </button>
                 <button className="secondary-button" type="button" onClick={handleExportSelectedShow}>
                   Exportar TXT
@@ -2890,7 +2899,9 @@ export default function App() {
     );
   }
 
-  if (appScreen === "live" && selectedProject && selectedShow) {
+  if ((appScreen === "live" || appScreen === "show-rehearsal") && selectedProject && selectedShow) {
+    const isShowRehearsal = appScreen === "show-rehearsal";
+
     return (
       <main
         className={isLiveFullscreen ? "live-stage-shell stage-fullscreen" : "live-stage-shell"}
@@ -2898,16 +2909,20 @@ export default function App() {
       >
         <header className="live-stage-header">
           <div>
-            <span className="app-kicker">{selectedProject.name}</span>
+            <span className="app-kicker">
+              {isShowRehearsal ? `Ensayo · ${selectedProject.name}` : selectedProject.name}
+            </span>
             <h1>{selectedShow.title}</h1>
-            <p>{formatShowDate(selectedShow.date)}</p>
+            <p>
+              {isShowRehearsal ? "Recorrido completo del setlist" : formatShowDate(selectedShow.date)}
+            </p>
           </div>
           <div className="live-header-actions">
             <button className="secondary-button" type="button" onClick={() => void handleToggleFullscreen()}>
               {isLiveFullscreen ? "Salir pantalla completa" : "Pantalla completa"}
             </button>
             <button className="secondary-button" type="button" onClick={() => void handleCloseLiveView()}>
-              Volver
+              Volver al show
             </button>
           </div>
         </header>
