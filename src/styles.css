@@ -245,6 +245,15 @@ label {
   overflow-wrap: anywhere;
 }
 
+.show-card strong,
+.show-card span {
+  display: block;
+}
+
+.show-card span {
+  margin-top: 0.25rem;
+}
+
 .project-card {
   min-height: 164px;
   align-content: start;
@@ -482,6 +491,124 @@ label {
   margin-top: 0.65rem !important;
   color: #d6dfda !important;
   white-space: pre-wrap;
+}
+
+.editor-header-actions {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.repertoire-toolbar {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(180px, 0.45fr) auto;
+  gap: 0.75rem;
+  align-items: end;
+  border-top: 1px solid #2d3833;
+  padding-top: 1rem;
+}
+
+.repertoire-result-count {
+  display: grid;
+  min-height: 48px;
+  place-items: center;
+  border: 1px solid #35413d;
+  border-radius: 8px;
+  color: #91e3bd;
+  font-weight: 900;
+  padding: 0 0.8rem;
+  white-space: nowrap;
+}
+
+.compact-song-list {
+  gap: 0.45rem;
+}
+
+.song-row {
+  display: grid;
+  grid-template-columns: 2.4rem minmax(180px, 1fr) minmax(220px, auto) auto;
+  gap: 0.75rem;
+  align-items: center;
+  border: 1px solid #2d3833;
+  border-radius: 8px;
+  background: #181d20;
+  min-height: 66px;
+  padding: 0.55rem 0.65rem;
+}
+
+.song-row:hover {
+  border-color: #3c594e;
+  background: #1c2624;
+}
+
+.song-row-number {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border-radius: 999px;
+  background: #101715;
+  color: #f2b84b;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.song-row-title {
+  min-width: 0;
+}
+
+.song-row-title strong,
+.song-row-title small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.song-row-title small {
+  color: #94a59d;
+  margin-top: 0.22rem;
+}
+
+.song-row-status {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+.status-chip {
+  border: 1px solid #4a3735;
+  border-radius: 999px;
+  color: #d9aaa6;
+  font-size: 0.72rem;
+  font-weight: 900;
+  padding: 0.28rem 0.5rem;
+  white-space: nowrap;
+}
+
+.status-chip.active {
+  border-color: #3c594e;
+  color: #91e3bd;
+}
+
+.status-chip.trigger {
+  border-color: #5c4a25;
+  color: #f2c56d;
+}
+
+.song-row-edit {
+  min-height: 42px;
+}
+
+.empty-filter-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  border: 1px dashed #35413d;
+  border-radius: 8px;
+  color: #94a59d;
+  min-height: 92px;
 }
 
 .song-actions,
@@ -1860,6 +1987,7 @@ label {
 
   .song-grid,
   .add-song-form,
+  .repertoire-toolbar,
   .create-project-fields,
   .live-stage-grid,
   .rehearsal-stage,
@@ -1895,6 +2023,26 @@ label {
 
   .danger-zone {
     grid-template-columns: 1fr;
+  }
+
+  .editor-header-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .song-row {
+    grid-template-columns: 2.25rem minmax(0, 1fr) auto;
+    gap: 0.55rem;
+  }
+
+  .song-row-status {
+    grid-column: 2 / -1;
+    justify-content: flex-start;
+  }
+
+  .song-row-edit {
+    grid-column: 3;
+    grid-row: 1;
   }
 
   .backup-actions {

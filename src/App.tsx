@@ -25,6 +25,7 @@ type ShowForm = Pick<Show, "title" | "date" | "notes">;
 type SongMode = { type: "create" } | { type: "edit"; songId: string };
 type ShowMode = { type: "create" } | { type: "edit"; showId: string };
 type AppScreen = "dashboard" | "project" | "show" | "live" | "rehearsal" | "show-rehearsal";
+type SongFilter = "all" | "click" | "track" | "triggers" | "silent";
 type TriggerSoundPlaybackState = {
   isPlaying: boolean;
   isPaused: boolean;
@@ -326,6 +327,8 @@ export default function App() {
   const [songMode, setSongMode] = useState<SongMode>({ type: "create" });
   const [songForm, setSongForm] = useState<SongForm>(emptySongForm);
   const [isSongEditorOpen, setIsSongEditorOpen] = useState(false);
+  const [songSearch, setSongSearch] = useState("");
+  const [songFilter, setSongFilter] = useState<SongFilter>("all");
   const [showMode, setShowMode] = useState<ShowMode>({ type: "create" });
   const [showForm, setShowForm] = useState<ShowForm>(emptyShowForm);
   const [isShowCreatorOpen, setIsShowCreatorOpen] = useState(false);
@@ -381,6 +384,29 @@ export default function App() {
   const rehearsalSongs = useMemo(() => {
     return selectedProject?.songs ?? [];
   }, [selectedProject]);
+
+  const visibleProjectSongs = useMemo(() => {
+    if (!selectedProject) {
+      return [];
+    }
+
+    const normalizedSearch = songSearch.trim().toLocaleLowerCase("es");
+
+    return selectedProject.songs.filter((song) => {
+      const matchesSearch =
+        !normalizedSearch ||
+        song.title.toLocaleLowerCase("es").includes(normalizedSearch) ||
+        song.notes.toLocaleLowerCase("es").includes(normalizedSearch);
+      const matchesFilter =
+        songFilter === "all" ||
+        (songFilter === "click" && hasClickActive(song)) ||
+        (songFilter === "track" && hasTrackActive(song)) ||
+        (songFilter === "triggers" && hasTriggerSounds(song)) ||
+        (songFilter === "silent" && !hasClickActive(song) && !hasTrackActive(song));
+
+      return matchesSearch && matchesFilter;
+    });
+  }, [selectedProject, songFilter, songSearch]);
 
   const activePlaybackSongs = appScreen === "rehearsal" ? rehearsalSongs : selectedShowSongs;
   const isPlaybackScreen =
@@ -2284,19 +2310,28 @@ export default function App() {
                   <h2>Temas</h2>
                 </div>
                 {songMode.type === "edit" && (
-                  <button
-                    className="secondary-button"
-                          type="button"
-                          onClick={() => {
-                            setSongMode({ type: "create" });
-                            setSongForm(emptySongForm);
-                            setTrackError("");
-                            setTriggerSoundError("");
-                            setIsSongEditorOpen(false);
-                          }}
-                        >
-                          Cancelar
-                  </button>
+                  <div className="editor-header-actions">
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={() => {
+                        setSongMode({ type: "create" });
+                        setSongForm(emptySongForm);
+                        setTrackError("");
+                        setTriggerSoundError("");
+                        setIsSongEditorOpen(false);
+                      }}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      className="danger-button"
+                      type="button"
+                      onClick={() => void handleDeleteSong(songMode.songId)}
+                    >
+                      Borrar tema
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -2528,32 +2563,88 @@ export default function App() {
             </form>
             )}
 
-            <div className="song-list">
+            {selectedProject.songs.length > 0 && (
+              <div className="repertoire-toolbar">
+                <label className="repertoire-search">
+                  Buscar tema
+                  <input
+                    type="search"
+                    value={songSearch}
+                    onChange={(event) => setSongSearch(event.target.value)}
+                    placeholder="Nombre o nota"
+                  />
+                </label>
+                <label>
+                  Mostrar
+                  <select
+                    value={songFilter}
+                    onChange={(event) => setSongFilter(event.target.value as SongFilter)}
+                  >
+                    <option value="all">Todos</option>
+                    <option value="click">Con click</option>
+                    <option value="track">Con pista</option>
+                    <option value="triggers">Con disparables</option>
+                    <option value="silent">Sin salida activa</option>
+                  </select>
+                </label>
+                <span className="repertoire-result-count" aria-live="polite">
+                  {visibleProjectSongs.length} de {selectedProject.songs.length}
+                </span>
+              </div>
+            )}
+
+            <div className="song-list compact-song-list">
               {selectedProject.songs.length === 0 ? (
                 <p className="empty-state">Sin temas cargados.</p>
+              ) : visibleProjectSongs.length === 0 ? (
+                <div className="empty-filter-state">
+                  <strong>No hay coincidencias</strong>
+                  <button
+                    className="text-button"
+                    type="button"
+                    onClick={() => {
+                      setSongSearch("");
+                      setSongFilter("all");
+                    }}
+                  >
+                    Limpiar búsqueda
+                  </button>
+                </div>
               ) : (
-                selectedProject.songs.map((song) => (
-                  <article className="song-card" key={song.id}>
-                    <div>
-                      <h3>{song.title}</h3>
-                      <p>
+                visibleProjectSongs.map((song) => (
+                  <article className="song-row" key={song.id}>
+                    <span className="song-row-number">
+                      {selectedProject.songs.findIndex((projectSong) => projectSong.id === song.id) + 1}
+                    </span>
+                    <div className="song-row-title">
+                      <strong>{song.title}</strong>
+                      <small>
                         {formatBpm(song.bpm)} BPM · {song.timeSignatureNumerator}/
-                        {song.timeSignatureDenominator} · {describePlayback(song)}
-                        {describeTriggerSounds(song)}
-                      </p>
+                        {song.timeSignatureDenominator}
+                      </small>
                     </div>
-                    <div className="song-actions">
-                      <button type="button" onClick={() => handleEditSong(song)}>
-                        Editar
-                      </button>
-                      <button
-                        className="danger-button"
-                        type="button"
-                        onClick={() => handleDeleteSong(song.id)}
-                      >
-                        Borrar
-                      </button>
+                    <div className="song-row-status">
+                      <span className={hasClickActive(song) ? "status-chip active" : "status-chip"}>
+                        Click {hasClickActive(song) ? "ON" : "OFF"}
+                      </span>
+                      {song.trackFileId && (
+                        <span className={hasTrackActive(song) ? "status-chip active" : "status-chip"}>
+                          Pista {hasTrackActive(song) ? "ON" : "OFF"}
+                        </span>
+                      )}
+                      {hasTriggerSounds(song) && (
+                        <span className="status-chip trigger">
+                          {song.triggerSounds.length} disparable{song.triggerSounds.length === 1 ? "" : "s"}
+                        </span>
+                      )}
                     </div>
+                    <button
+                      className="secondary-button song-row-edit"
+                      type="button"
+                      onClick={() => handleEditSong(song)}
+                    >
+                      Editar
+                    </button>
                   </article>
                 ))
               )}
