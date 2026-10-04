@@ -1991,75 +1991,100 @@ export default function App() {
           </span>
         </section>
 
-        <TempoFinder onTempoDetected={setDetectedBpm} />
+        <section className="dashboard-workspace">
+          <TempoFinder onTempoDetected={setDetectedBpm} />
 
-        <section className="dashboard-grid">
-          <form className="panel-section form-stack" onSubmit={handleCreateProject}>
-            <h2>Crear nuevo proyecto</h2>
-            <label>
-              Nombre
-              <input
-                value={newProjectForm.name}
-                onChange={(event) =>
-                  setNewProjectForm((current) => ({ ...current, name: event.target.value }))
-                }
-                placeholder="Ej: Los sueños del equilibrio"
-                required
-              />
-            </label>
-            <label>
-              Descripción
-              <textarea
-                value={newProjectForm.description}
-                onChange={(event) =>
-                  setNewProjectForm((current) => ({ ...current, description: event.target.value }))
-                }
-                rows={3}
-              />
-            </label>
-            <button type="submit">Crear nuevo proyecto</button>
-          </form>
+          <div className="dashboard-project-column">
+            <form
+              className="panel-section form-stack create-project-panel"
+              onSubmit={handleCreateProject}
+            >
+              <div>
+                <span className="section-label">Nuevo</span>
+                <h2>Crear proyecto</h2>
+              </div>
+              <div className="create-project-fields">
+                <label>
+                  Nombre
+                  <input
+                    value={newProjectForm.name}
+                    onChange={(event) =>
+                      setNewProjectForm((current) => ({ ...current, name: event.target.value }))
+                    }
+                    placeholder="Ej: Los sueños del equilibrio"
+                    required
+                  />
+                </label>
+                <label>
+                  Descripción
+                  <input
+                    value={newProjectForm.description}
+                    onChange={(event) =>
+                      setNewProjectForm((current) => ({
+                        ...current,
+                        description: event.target.value
+                      }))
+                    }
+                    placeholder="Opcional"
+                  />
+                </label>
+                <button type="submit">Crear proyecto</button>
+              </div>
+            </form>
 
-          <section className="backup-panel">
-            <div>
-              <span className="section-label">Backup</span>
-              <h2>Exportar / importar</h2>
-              <p>Incluye proyectos, canciones y shows. No incluye archivos de audio.</p>
-            </div>
-            <button type="button" onClick={handleExportBackup}>
-              Exportar JSON
-            </button>
-            <label className="file-button secondary-file-button">
-              Importar JSON
-              <input accept=".json,application/json" type="file" onChange={handleImportBackup} />
-            </label>
-            {backupStatus && <p className="backup-status">{backupStatus}</p>}
-            {backupError && <p className="form-error">{backupError}</p>}
-          </section>
-        </section>
+            <section className="panel-section dashboard-projects-panel">
+              <div className="section-header compact">
+                <div>
+                  <span className="section-label">Biblioteca</span>
+                  <h2>Proyectos creados</h2>
+                </div>
+                <strong className="project-count">{projects.length}</strong>
+              </div>
 
-        <section className="project-card-grid">
-          {projects.length === 0 ? (
-            <div className="empty-panel">
-              <h2>Sin proyectos</h2>
-              <p>Creá tu primera banda/proyecto para cargar temas y shows.</p>
-            </div>
-          ) : (
-            projects.map((project) => (
-              <button
-                className="project-card"
-                key={project.id}
-                type="button"
-                onClick={() => handleOpenProject(project.id)}
-              >
-                <strong>{project.name}</strong>
-                <span>{project.description || "Sin descripción"}</span>
-                <small>
-                  {project.songs.length} temas · {project.shows.length} shows
-                </small>
-              </button>
-            ))
-          )}
+              <div className="project-card-grid">
+                {projects.length === 0 ? (
+                  <div className="empty-panel compact-empty-panel">
+                    <h2>Sin proyectos</h2>
+                    <p>Creá tu primera banda/proyecto para cargar temas y shows.</p>
+                  </div>
+                ) : (
+                  projects.map((project) => (
+                    <button
+                      className="project-card"
+                      key={project.id}
+                      type="button"
+                      onClick={() => handleOpenProject(project.id)}
+                    >
+                      <strong>{project.name}</strong>
+                      <span>{project.description || "Sin descripción"}</span>
+                      <small>
+                        {project.songs.length} temas · {project.shows.length} shows
+                      </small>
+                    </button>
+                  ))
+                )}
+              </div>
+            </section>
+
+            <section className="backup-panel dashboard-backup-panel">
+              <div>
+                <span className="section-label">Backup</span>
+                <h2>Exportar / importar</h2>
+                <p>Incluye proyectos, canciones y shows. No incluye archivos de audio.</p>
+              </div>
+              <div className="backup-actions">
+                <button type="button" onClick={handleExportBackup}>
+                  Exportar JSON
+                </button>
+                <label className="file-button secondary-file-button">
+                  Importar JSON
+                  <input accept=".json,application/json" type="file" onChange={handleImportBackup} />
+                </label>
+              </div>
+              {backupStatus && <p className="backup-status">{backupStatus}</p>}
+              {backupError && <p className="form-error">{backupError}</p>}
+            </section>
+          </div>
         </section>
       </main>
     );

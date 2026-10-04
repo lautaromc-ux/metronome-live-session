@@ -1310,6 +1310,74 @@ label {
   font-weight: 800;
 }
 
+.dashboard-workspace {
+  display: grid;
+  grid-template-columns: minmax(300px, 370px) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.dashboard-project-column {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.create-project-panel h2,
+.dashboard-projects-panel h2 {
+  margin: 0.3rem 0 0;
+}
+
+.create-project-fields {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) minmax(160px, 1fr) auto;
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.create-project-fields button {
+  white-space: nowrap;
+}
+
+.dashboard-projects-panel {
+  min-width: 0;
+}
+
+.dashboard-projects-panel .project-card-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.project-count {
+  display: grid;
+  width: 2.4rem;
+  height: 2.4rem;
+  place-items: center;
+  border: 1px solid #3c594e;
+  border-radius: 999px;
+  background: #101715;
+  color: #91e3bd;
+}
+
+.compact-empty-panel {
+  min-height: 180px;
+  grid-column: 1 / -1;
+}
+
+.dashboard-backup-panel {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.backup-actions {
+  display: flex;
+  gap: 0.65rem;
+}
+
+.dashboard-backup-panel .backup-status,
+.dashboard-backup-panel .form-error {
+  grid-column: 1 / -1;
+}
+
 .tempo-finder {
   position: relative;
   overflow: hidden;
@@ -1426,6 +1494,93 @@ label {
   user-select: none;
 }
 
+.dashboard-workspace > .tempo-finder {
+  align-self: start;
+  gap: 0.75rem;
+  padding: 16px;
+}
+
+.dashboard-workspace .tempo-finder-heading {
+  align-items: stretch;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.dashboard-workspace .tempo-finder-heading h2 {
+  font-size: 1.75rem;
+}
+
+.dashboard-workspace .tempo-finder-heading p {
+  font-size: 0.87rem;
+  line-height: 1.4;
+}
+
+.dashboard-workspace .tempo-result {
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-width: 0;
+  padding: 0.65rem 0.75rem;
+  text-align: left;
+}
+
+.dashboard-workspace .tempo-result span {
+  align-self: end;
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.dashboard-workspace .tempo-result strong {
+  align-self: center;
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  font-size: 2.3rem;
+}
+
+.dashboard-workspace .tempo-result small {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.dashboard-workspace .tempo-method-grid {
+  grid-template-columns: 1fr;
+  gap: 0.55rem;
+}
+
+.dashboard-workspace .tempo-method {
+  grid-template-columns: 1fr;
+  gap: 0.65rem;
+  padding: 0.75rem;
+}
+
+.dashboard-workspace .tempo-method p {
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.dashboard-workspace .tempo-method-number {
+  margin-bottom: 0.2rem;
+}
+
+.dashboard-workspace .tap-tempo-button {
+  min-height: 72px;
+}
+
+.dashboard-workspace .tempo-status {
+  align-items: stretch;
+  flex-direction: column;
+  font-size: 0.82rem;
+  padding-top: 0.7rem;
+}
+
+.dashboard-workspace .tempo-adjustments {
+  display: grid;
+  grid-template-columns: 1fr repeat(2, auto);
+  margin-left: 0;
+}
+
+.dashboard-workspace .tempo-method .text-button {
+  grid-column: auto;
+}
+
 .tap-tempo-button:active {
   transform: scale(0.985);
 }
@@ -1535,8 +1690,17 @@ label {
   .workspace,
   .management-grid,
   .dashboard-grid,
+  .dashboard-workspace,
   .project-screen-grid,
   .tempo-method-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-workspace .tempo-method-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .dashboard-workspace .tempo-method {
     grid-template-columns: 1fr;
   }
 
@@ -1639,12 +1803,24 @@ label {
 
   .song-grid,
   .add-song-form,
+  .create-project-fields,
   .live-stage-grid,
   .rehearsal-stage,
   .stage-performance,
   .stage-indicators,
   .stage-volume-controls,
   .trigger-sound-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-workspace .tempo-method-grid,
+  .dashboard-projects-panel .project-card-grid,
+  .dashboard-backup-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .backup-actions {
+    display: grid;
     grid-template-columns: 1fr;
   }
 
