@@ -135,8 +135,18 @@ label {
 
 .live-header-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.75rem;
   justify-content: flex-end;
+}
+
+.stage-safety-button {
+  background: #203b32;
+  color: #91e3bd;
+}
+
+.stage-safety-button:hover {
+  background: #294b40;
 }
 
 .local-data-notice {
@@ -1544,13 +1554,46 @@ label {
 }
 
 .dashboard-backup-panel {
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: 1fr;
   align-items: center;
 }
 
 .backup-actions {
   display: flex;
   gap: 0.65rem;
+}
+
+.backup-groups {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.backup-group {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.7fr) repeat(3, minmax(150px, 1fr));
+  gap: 0.65rem;
+  align-items: end;
+  border: 1px solid #2d3833;
+  border-radius: 8px;
+  background: #111719;
+  padding: 0.75rem;
+}
+
+.backup-group > strong {
+  align-self: center;
+  color: #f2b84b;
+}
+
+.backup-mode-field {
+  font-size: 0.78rem;
+}
+
+.compact-backup-group {
+  grid-template-columns: minmax(150px, 0.7fr) minmax(0, 1fr);
+}
+
+.compact-backup-group .backup-actions {
+  justify-content: flex-end;
 }
 
 .dashboard-backup-panel .backup-status,
@@ -2048,6 +2091,21 @@ label {
   .backup-actions {
     display: grid;
     grid-template-columns: 1fr;
+  }
+
+  .backup-group,
+  .compact-backup-group {
+    grid-template-columns: 1fr;
+  }
+
+  .compact-backup-group .backup-actions {
+    justify-content: stretch;
+  }
+
+  .live-header-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
   }
 
   .rehearsal-player,

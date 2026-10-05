@@ -1,12 +1,22 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FormEvent
+} from "react";
 import {
   deleteTrackFile,
   getTrackFile,
   deleteTriggerSoundFile,
   getTriggerSoundFile,
+  restoreAudioBackupRecords,
   saveTriggerSoundFile,
   saveTrackFile
 } from "./audioStorage";
+import { createFullBackup, parseFullBackup } from "./fullBackup";
 import { ControlledAudioPlayer, LiveAudioEngine, type AudioChannelMode } from "./liveAudio";
 import TempoFinder from "./TempoFinder";
 import {
@@ -26,6 +36,12 @@ type SongMode = { type: "create" } | { type: "edit"; songId: string };
 type ShowMode = { type: "create" } | { type: "edit"; showId: string };
 type AppScreen = "dashboard" | "project" | "show" | "live" | "rehearsal" | "show-rehearsal";
 type SongFilter = "all" | "click" | "track" | "triggers" | "silent";
+type FullBackupImportMode = "merge" | "replace";
+type WakeLockHandle = {
+  released: boolean;
+  release: () => Promise<void>;
+  addEventListener: (type: "release", listener: () => void) => void;
+};
 type TriggerSoundPlaybackState = {
   isPlaying: boolean;
   isPaused: boolean;
@@ -159,6 +175,14 @@ function formatDuration(seconds: number) {
     .padStart(2, "0");
 
   return `${minutes}:${remainingSeconds}`;
+}
+
+function formatFileSize(bytes: number) {
+  if (bytes < 1024 * 1024) {
+    return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  }
+
+  return `${(bytes / (1024 * 1024)).toFixed(bytes >= 10 * 1024 * 1024 ? 0 : 1)} MB`;
 }
 
 function getSongTimelineDuration(song: Song) {
@@ -352,12 +376,19 @@ export default function App() {
   const [liveError, setLiveError] = useState("");
   const [backupStatus, setBackupStatus] = useState("");
   const [backupError, setBackupError] = useState("");
+  const [isFullBackupBusy, setIsFullBackupBusy] = useState(false);
+  const [fullBackupImportMode, setFullBackupImportMode] =
+    useState<FullBackupImportMode>("merge");
+  const [isStageLocked, setIsStageLocked] = useState(false);
+  const [keepScreenAwake, setKeepScreenAwake] = useState(true);
+  const [isWakeLockActive, setIsWakeLockActive] = useState(false);
   const [detectedBpm, setDetectedBpm] = useState<number | null>(null);
   const liveAudioRef = useRef<LiveAudioEngine | null>(null);
   const triggerAudioRefs = useRef<Record<string, ControlledAudioPlayer>>({});
   const liveStageRef = useRef<HTMLElement | null>(null);
   const activeSetlistItemRef = useRef<HTMLElement | null>(null);
   const activeRehearsalSongRef = useRef<HTMLButtonElement | null>(null);
+  const wakeLockRef = useRef<WakeLockHandle | null>(null);
 
   const selectedProject = useMemo(() => {
     return projects.find((project) => project.id === selectedProjectId) ?? projects[0] ?? null;
@@ -437,6 +468,40 @@ export default function App() {
     : isLivePaused || liveStatus === "Detenido."
       ? "STOPPED"
       : "READY";
+
+  const releaseStageWakeLock = useCallback(async () => {
+    const wakeLock = wakeLockRef.current;
+    wakeLockRef.current = null;
+
+    if (wakeLock && !wakeLock.released) {
+      await wakeLock.release();
+    }
+
+    setIsWakeLockActive(false);
+  }, []);
+
+  const requestStageWakeLock = useCallback(async () => {
+    const wakeLockNavigator = navigator as Navigator & {
+      wakeLock?: { request: (type: "screen") => Promise<WakeLockHandle> };
+    };
+
+    if (!wakeLockNavigator.wakeLock || document.visibilityState !== "visible") {
+      setIsWakeLockActive(false);
+      return;
+    }
+
+    try {
+      const wakeLock = await wakeLockNavigator.wakeLock.request("screen");
+      wakeLockRef.current = wakeLock;
+      setIsWakeLockActive(true);
+      wakeLock.addEventListener("release", () => {
+        wakeLockRef.current = null;
+        setIsWakeLockActive(false);
+      });
+    } catch {
+      setIsWakeLockActive(false);
+    }
+  }, []);
 
   useEffect(() => {
     saveProjects(projects);
@@ -527,6 +592,27 @@ export default function App() {
     document.addEventListener("fullscreenchange", handleFullscreenChange);
     return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
   }, []);
+
+  useEffect(() => {
+    if (!isPlaybackScreen || !keepScreenAwake) {
+      void releaseStageWakeLock();
+      return;
+    }
+
+    void requestStageWakeLock();
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        void requestStageWakeLock();
+      }
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      void releaseStageWakeLock();
+    };
+  }, [isPlaybackScreen, keepScreenAwake, releaseStageWakeLock, requestStageWakeLock]);
 
   useEffect(() => {
     void liveAudioRef.current?.stop();
@@ -759,6 +845,92 @@ export default function App() {
     URL.revokeObjectURL(link.href);
     setBackupError("");
     setBackupStatus("Backup exportado. No incluye archivos de audio.");
+  }
+
+  async function handleExportFullBackup() {
+    setIsFullBackupBusy(true);
+    setBackupError("");
+    setBackupStatus("Preparando backup completo...");
+
+    try {
+      const backup = await createFullBackup(projects);
+      const link = document.createElement("a");
+      const date = new Date().toISOString().slice(0, 10);
+      const url = URL.createObjectURL(backup.blob);
+
+      link.href = url;
+      link.download = `metronomo-live-completo-${date}.mlive`;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+      setBackupStatus(
+        `Backup completo exportado: ${projects.length} proyectos, ${backup.audioCount} audios, ${formatFileSize(backup.audioBytes)}.`
+      );
+    } catch {
+      setBackupError("No se pudo crear el backup completo. Los datos originales siguen intactos.");
+      setBackupStatus("");
+    } finally {
+      setIsFullBackupBusy(false);
+    }
+  }
+
+  async function handleImportFullBackup(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    if (!file.name.toLowerCase().endsWith(".mlive")) {
+      setBackupError("Elegí un archivo .mlive creado por el backup completo.");
+      setBackupStatus("");
+      return;
+    }
+
+    setIsFullBackupBusy(true);
+    setBackupError("");
+    setBackupStatus("Revisando backup completo...");
+
+    try {
+      const backup = await parseFullBackup(file);
+      const isMerge = fullBackupImportMode === "merge";
+      const confirmed = window.confirm(
+        isMerge
+          ? `Combinar ${backup.projects.length} proyectos y ${backup.audioFiles.length} audios con este dispositivo? Los proyectos existentes no se reemplazan.`
+          : `Reemplazar la lista de proyectos con ${backup.projects.length} proyectos y restaurar ${backup.audioFiles.length} audios?`
+      );
+
+      if (!confirmed) {
+        setBackupStatus("");
+        return;
+      }
+
+      const existingIds = new Set(projects.map((project) => project.id));
+      const projectsToImport = isMerge
+        ? backup.projects.filter((project) => !existingIds.has(project.id))
+        : backup.projects;
+      const importedProjectIds = new Set(projectsToImport.map((project) => project.id));
+      const audioFilesToImport = isMerge
+        ? backup.audioFiles.filter((record) => importedProjectIds.has(record.projectId))
+        : backup.audioFiles;
+      const nextProjects = isMerge ? [...projects, ...projectsToImport] : backup.projects;
+
+      await restoreAudioBackupRecords(audioFilesToImport);
+      setProjects(nextProjects);
+      saveProjects(nextProjects);
+      setSelectedProjectId(nextProjects[0]?.id ?? null);
+      setSelectedShowId(nextProjects[0]?.shows[0]?.id ?? null);
+      setBackupStatus(
+        isMerge
+          ? `Backup combinado: ${projectsToImport.length} proyectos nuevos y ${audioFilesToImport.length} audios restaurados.`
+          : `Backup restaurado: ${nextProjects.length} proyectos y ${audioFilesToImport.length} audios.`
+      );
+    } catch {
+      setBackupError("No se pudo leer o restaurar ese backup completo.");
+      setBackupStatus("");
+    } finally {
+      setIsFullBackupBusy(false);
+    }
   }
 
   async function handleImportBackup(event: ChangeEvent<HTMLInputElement>) {
@@ -1213,6 +1385,8 @@ export default function App() {
 
     setTriggerSoundError("");
     setTriggerSoundStates(createTriggerSoundPlaybackStates(firstSong?.triggerSounds ?? []));
+    setIsStageLocked(true);
+    setKeepScreenAwake(true);
     setAppScreen("live");
   }
 
@@ -1236,6 +1410,8 @@ export default function App() {
     setLiveError("");
     setTriggerSoundError("");
     setTriggerSoundStates(createTriggerSoundPlaybackStates(firstSong?.triggerSounds ?? []));
+    setIsStageLocked(false);
+    setKeepScreenAwake(true);
     setAppScreen("show-rehearsal");
   }
 
@@ -1258,6 +1434,8 @@ export default function App() {
     setLiveError("");
     setTriggerSoundError("");
     setTriggerSoundStates(createTriggerSoundPlaybackStates(rehearsalSongs[0]?.triggerSounds ?? []));
+    setIsStageLocked(false);
+    setKeepScreenAwake(true);
     setAppScreen("rehearsal");
   }
 
@@ -1542,7 +1720,7 @@ export default function App() {
   }
 
   function handleLiveToggle(field: "trackEnabled" | "clickEnabled") {
-    if (!liveSong) {
+    if (!liveSong || isStageLocked) {
       return;
     }
 
@@ -1582,10 +1760,18 @@ export default function App() {
   }
 
   function handleToggleChannelMode() {
+    if (isStageLocked) {
+      return;
+    }
+
     const nextMode: AudioChannelMode = channelMode === "normal" ? "inverted" : "normal";
     setChannelMode(nextMode);
     liveAudioRef.current?.setChannelMode(nextMode);
     Object.values(triggerAudioRefs.current).forEach((player) => player.setChannelMode(nextMode));
+  }
+
+  function handleToggleKeepScreenAwake() {
+    setKeepScreenAwake((currentValue) => !currentValue);
   }
 
   function renderKeyboardHelp() {
@@ -1609,12 +1795,13 @@ export default function App() {
 
     return (
       <div className="stage-volume-controls">
-        <label className="stage-volume-control">
+        <label className={isStageLocked ? "stage-volume-control disabled" : "stage-volume-control"}>
           <span>
             CLICK VOL <strong>{formatVolumePercent(clickVolume)}</strong>
           </span>
           <input
             aria-label="Volumen del click"
+            disabled={isStageLocked}
             min={0}
             max={1}
             step={0.01}
@@ -1626,13 +1813,19 @@ export default function App() {
           />
         </label>
 
-        <label className={song.trackFileId ? "stage-volume-control" : "stage-volume-control disabled"}>
+        <label
+          className={
+            song.trackFileId && !isStageLocked
+              ? "stage-volume-control"
+              : "stage-volume-control disabled"
+          }
+        >
           <span>
             TRACK VOL <strong>{formatVolumePercent(trackVolume)}</strong>
           </span>
           <input
             aria-label="Volumen de la pista"
-            disabled={!song.trackFileId}
+            disabled={!song.trackFileId || isStageLocked}
             min={0}
             max={1}
             step={0.01}
@@ -1702,6 +1895,7 @@ export default function App() {
                     </span>
                     <input
                       aria-label={`Volumen de ${sound.fileName}`}
+                      disabled={isStageLocked}
                       min={0}
                       max={1}
                       step={0.01}
@@ -2102,14 +2296,56 @@ export default function App() {
                 <span className="section-label">Backup</span>
                 <h2>Exportar / importar</h2>
               </div>
-              <div className="backup-actions">
-                <button type="button" onClick={handleExportBackup}>
-                  Exportar JSON
-                </button>
-                <label className="file-button secondary-file-button">
-                  Importar JSON
-                  <input accept=".json,application/json" type="file" onChange={handleImportBackup} />
-                </label>
+              <div className="backup-groups">
+                <div className="backup-group primary-backup-group">
+                  <strong>Completo con audios</strong>
+                  <button
+                    type="button"
+                    onClick={() => void handleExportFullBackup()}
+                    disabled={isFullBackupBusy}
+                  >
+                    {isFullBackupBusy ? "Procesando..." : "Exportar completo"}
+                  </button>
+                  <label className="backup-mode-field">
+                    Al importar
+                    <select
+                      value={fullBackupImportMode}
+                      disabled={isFullBackupBusy}
+                      onChange={(event) =>
+                        setFullBackupImportMode(event.target.value as FullBackupImportMode)
+                      }
+                    >
+                      <option value="merge">Combinar sin borrar</option>
+                      <option value="replace">Reemplazar proyectos</option>
+                    </select>
+                  </label>
+                  <label className="file-button secondary-file-button">
+                    Importar completo
+                    <input
+                      accept=".mlive,application/x-metronome-live-backup"
+                      disabled={isFullBackupBusy}
+                      type="file"
+                      onChange={(event) => void handleImportFullBackup(event)}
+                    />
+                  </label>
+                </div>
+
+                <div className="backup-group compact-backup-group">
+                  <strong>JSON sin audios</strong>
+                  <div className="backup-actions">
+                    <button className="secondary-button" type="button" onClick={handleExportBackup}>
+                      Exportar JSON
+                    </button>
+                    <label className="file-button secondary-file-button">
+                      Importar JSON
+                      <input
+                        accept=".json,application/json"
+                        type="file"
+                        onChange={handleImportBackup}
+                      />
+                    </label>
+                  </div>
+                </div>
               </div>
               {backupStatus && <p className="backup-status">{backupStatus}</p>}
               {backupError && <p className="form-error">{backupError}</p>}
@@ -2828,6 +3064,22 @@ export default function App() {
             <p>{rehearsalSongs.length} temas disponibles</p>
           </div>
           <div className="live-header-actions">
+            <button
+              aria-pressed={isStageLocked}
+              className={isStageLocked ? "stage-safety-button active" : "secondary-button"}
+              type="button"
+              onClick={() => setIsStageLocked((currentValue) => !currentValue)}
+            >
+              Ajustes {isStageLocked ? "bloqueados" : "libres"}
+            </button>
+            <button
+              aria-pressed={keepScreenAwake}
+              className={keepScreenAwake ? "stage-safety-button active" : "secondary-button"}
+              type="button"
+              onClick={handleToggleKeepScreenAwake}
+            >
+              Pantalla {keepScreenAwake ? (isWakeLockActive ? "encendida" : "ON") : "OFF"}
+            </button>
             <button className="secondary-button" type="button" onClick={() => void handleToggleFullscreen()}>
               {isLiveFullscreen ? "Salir pantalla completa" : "Pantalla completa"}
             </button>
@@ -2887,6 +3139,7 @@ export default function App() {
               <div className="stage-indicators">
                 <button
                   className={hasClickActive(liveSong) ? "indicator on" : "indicator off"}
+                  disabled={isStageLocked}
                   type="button"
                   onClick={() => handleLiveToggle("clickEnabled")}
                 >
@@ -2896,7 +3149,7 @@ export default function App() {
                   className={hasTrackActive(liveSong) ? "indicator on" : "indicator off"}
                   type="button"
                   onClick={() => handleLiveToggle("trackEnabled")}
-                  disabled={!liveSong.trackFileId}
+                  disabled={!liveSong.trackFileId || isStageLocked}
                 >
                   TRACK {hasTrackActive(liveSong) ? "ON" : "OFF"}
                 </button>
@@ -2920,6 +3173,7 @@ export default function App() {
                 </div>
                 {liveDuration ? (
                   <input
+                    disabled={isStageLocked}
                     min={0}
                     max={liveDuration}
                     step={0.1}
@@ -3009,6 +3263,22 @@ export default function App() {
             </p>
           </div>
           <div className="live-header-actions">
+            <button
+              aria-pressed={isStageLocked}
+              className={isStageLocked ? "stage-safety-button active" : "secondary-button"}
+              type="button"
+              onClick={() => setIsStageLocked((currentValue) => !currentValue)}
+            >
+              Ajustes {isStageLocked ? "bloqueados" : "libres"}
+            </button>
+            <button
+              aria-pressed={keepScreenAwake}
+              className={keepScreenAwake ? "stage-safety-button active" : "secondary-button"}
+              type="button"
+              onClick={handleToggleKeepScreenAwake}
+            >
+              Pantalla {keepScreenAwake ? (isWakeLockActive ? "encendida" : "ON") : "OFF"}
+            </button>
             <button className="secondary-button" type="button" onClick={() => void handleToggleFullscreen()}>
               {isLiveFullscreen ? "Salir pantalla completa" : "Pantalla completa"}
             </button>
@@ -3043,6 +3313,7 @@ export default function App() {
                 <div className="stage-indicators">
                   <button
                     className={hasClickActive(liveSong) ? "indicator on" : "indicator off"}
+                    disabled={isStageLocked}
                     type="button"
                     onClick={() => handleLiveToggle("clickEnabled")}
                   >
@@ -3052,7 +3323,7 @@ export default function App() {
                     className={hasTrackActive(liveSong) ? "indicator on" : "indicator off"}
                     type="button"
                     onClick={() => handleLiveToggle("trackEnabled")}
-                    disabled={!liveSong.trackFileId}
+                    disabled={!liveSong.trackFileId || isStageLocked}
                   >
                     TRACK {hasTrackActive(liveSong) ? "ON" : "OFF"}
                   </button>
@@ -3076,6 +3347,7 @@ export default function App() {
                   </div>
                   {liveDuration ? (
                     <input
+                      disabled={isStageLocked}
                       min={0}
                       max={liveDuration}
                       step={0.1}

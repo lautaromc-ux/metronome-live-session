@@ -12,6 +12,14 @@ type StoredTrack = {
   updatedAt: string;
 };
 
+export type AudioBackupRecord = {
+  storageKey: string;
+  file: Blob;
+  fileName: string;
+  fileType: string;
+  updatedAt: string;
+};
+
 function openAudioDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = window.indexedDB.open(DB_NAME, DB_VERSION);
@@ -56,6 +64,10 @@ function getTriggerSoundKey(soundId: string) {
 
 function getLegacyControlledTrackKey(soundId: string) {
   return `${LEGACY_CONTROLLED_TRACK_KEY_PREFIX}${soundId}`;
+}
+
+export function getTriggerSoundBackupStorageKeys(soundId: string) {
+  return [getTriggerSoundKey(soundId), getLegacyControlledTrackKey(soundId)];
 }
 
 async function saveAudioFile(storageKey: string, file: File) {
@@ -111,4 +123,55 @@ export async function getTriggerSoundFile(soundId: string): Promise<File | null>
 export async function deleteTriggerSoundFile(soundId: string) {
   await deleteAudioFile(getTriggerSoundKey(soundId));
   await deleteAudioFile(getLegacyControlledTrackKey(soundId));
+}
+
+export async function getAudioBackupRecords(storageKeys: string[]): Promise<AudioBackupRecord[]> {
+  const requestedKeys = new Set(storageKeys);
+  const records = await runTrackTransaction<StoredTrack[]>("readonly", (store) => store.getAll());
+
+  return records
+    .filter((record) => requestedKeys.has(record.songId))
+    .map((record) => ({
+      storageKey: record.songId,
+      file: record.file,
+      fileName: record.fileName,
+      fileType: record.fileType,
+      updatedAt: record.updatedAt
+    }));
+}
+
+export async function restoreAudioBackupRecords(records: AudioBackupRecord[]) {
+  if (records.length === 0) {
+    return;
+  }
+
+  const database = await openAudioDatabase();
+
+  await new Promise<void>((resolve, reject) => {
+    const transaction = database.transaction(TRACK_STORE, "readwrite");
+    const store = transaction.objectStore(TRACK_STORE);
+
+    records.forEach((record) => {
+      store.put({
+        songId: record.storageKey,
+        file: record.file,
+        fileName: record.fileName,
+        fileType: record.fileType,
+        updatedAt: record.updatedAt
+      } satisfies StoredTrack);
+    });
+
+    transaction.oncomplete = () => {
+      database.close();
+      resolve();
+    };
+    transaction.onerror = () => {
+      database.close();
+      reject(transaction.error);
+    };
+    transaction.onabort = () => {
+      database.close();
+      reject(transaction.error);
+    };
+  });
 }
